@@ -37,7 +37,7 @@ public class Plant
 }
 ```
 
-2. Make DbContext
+2. Create DbContext
 
 ```C#
 public class ApplicationDbContext : IDisposable
@@ -70,7 +70,7 @@ public class ApplicationDbContext : IDisposable
 }
 ```
 
-3. enter in program.cs
+3.  Update program.cs
 
 ````C#
 bld.Services.AddScoped<ApplicationDbContext>(provider => new ApplicationDbContext(connectionString));

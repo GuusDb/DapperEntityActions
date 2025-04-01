@@ -7,6 +7,9 @@
     <Description>A package that mimics EF core actions with dapper. Used for the programmers that are not allowed to use EF core at their company</Description>
     <RepositoryUrl>https://github.com/GuusDb/DapperEntityActions</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>Dapper, ORM, EFCore Alternative, SQL</PackageTags>
+    <Version>1.0.1</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
@@ -14,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />
+    <None Include="..\README.md" Pack="true" PackagePath="\"/>
   </ItemGroup>
 
 </Project>

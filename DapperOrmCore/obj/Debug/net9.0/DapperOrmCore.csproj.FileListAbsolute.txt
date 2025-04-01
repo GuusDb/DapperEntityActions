@@ -1,0 +1,13 @@
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\bin\Debug\net9.0\DapperOrmCore.deps.json
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\bin\Debug\net9.0\DapperOrmCore.dll
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\bin\Debug\net9.0\DapperOrmCore.pdb
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.csproj.AssemblyReference.cache
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.AssemblyInfoInputs.cache
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.AssemblyInfo.cs
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.csproj.CoreCompileInputs.cache
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.sourcelink.json
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.dll
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\refint\DapperOrmCore.dll
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\DapperOrmCore.pdb
+C:\Projects\alpha.project\IPC.Service\DapperOrmCore\obj\Debug\net9.0\ref\DapperOrmCore.dll

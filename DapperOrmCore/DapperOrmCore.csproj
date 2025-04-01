@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <PackageId>DapperEntityActions</PackageId>
+    <Authors>Guus De Bruyn</Authors>
+    <Description>A package that mimics EF core actions with dapper. Used for the programmers that are not allowed to use EF core at their company</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

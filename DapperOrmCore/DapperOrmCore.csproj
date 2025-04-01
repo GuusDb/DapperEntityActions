@@ -2,12 +2,18 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <PackageId>DapperEntityActions</PackageId>
+    <PackageId>CustomDapperEntityActions</PackageId>
     <Authors>Guus De Bruyn</Authors>
     <Description>A package that mimics EF core actions with dapper. Used for the programmers that are not allowed to use EF core at their company</Description>
+    <RepositoryUrl>https://github.com/GuusDb/DapperEntityActions</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+  </ItemGroup>
 
 </Project>

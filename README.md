@@ -73,23 +73,35 @@ public class ApplicationDbContext : IDisposable
 
 3.  Update program.cs
 
-````C#
-bld.Services.AddScoped<ApplicationDbContext>(provider => new ApplicationDbContext(connectionString));
 ```C#
-var insert = await dbContext.Tests.InsertAsync<string>(new Plant
+bld.Services.AddScoped<ApplicationDbContext>(provider => new ApplicationDbContext(connectionString));
+```
+
+4. usage
+
+```C#
+// insert
+var insert = await dbContext.Tests.InsertAsync<string>(new TestLalala
 {
     Description = "Test",
     IsAcive = true
 });
 
+// update
 var update = await dbContext.Tests.UpdateAsync(new TestLalala
 {
     Id = 5,
     Description = "Luksass",
     IsAcive = true
 });
-var plants = await dbContext.Tests.GetByIdAsync(5);
+// Get byid
+await dbContext.Tests.GetByIdAsync(5);
 await dbContext.Tests.DeleteAsync(5);
-4. usage
-````
 
+// Linq like query
+var specificTests = await dbContext.Tests.WhereAsync(x =>x.IsAcive );
+
+// GetAll
+DbContext.Tests.GetAllAsync
+
+```

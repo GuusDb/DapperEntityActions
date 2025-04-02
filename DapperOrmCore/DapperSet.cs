@@ -4,6 +4,7 @@ using System.Data;
 using System.Reflection;
 using Dapper;
 using System.Text.RegularExpressions;
+using System.Linq.Expressions;
 
 namespace DapperOrmCore;
 public class DapperSet<T> : IDisposable where T : class
@@ -230,6 +231,17 @@ public class DapperSet<T> : IDisposable where T : class
         }
 
         return rowsAffected > 0;
+    }
+
+    public async Task<IEnumerable<T>> WhereAsync(Expression<Func<T, bool>> predicate)
+    {
+        EnsureNotDisposed();
+
+        var visitor = new WhereExpressionVisitor<T>(_propertyMap);
+        var (sqlCondition, parameters) = visitor.Translate(predicate);
+
+        string sql = $"SELECT * FROM {_fullTableName} WHERE {sqlCondition}";
+        return await _connection.QueryAsync<T>(sql, parameters, transaction: _transaction);
     }
 
     private string ValidateSchemaName(string name)

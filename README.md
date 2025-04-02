@@ -16,6 +16,7 @@ CustomDapperEntityActions bridges the gap between Dapper's lightweight performan
 ## Installation
 
 Install via NuGet Package Manager:
+dotnet add package CustomDapperEntityActions --version 1.0.2
 
 ## How to use
 
@@ -91,3 +92,4 @@ var plants = await dbContext.Tests.GetByIdAsync(5);
 await dbContext.Tests.DeleteAsync(5);
 4. usage
 ````
+

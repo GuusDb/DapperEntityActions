@@ -98,7 +98,23 @@ var update = await dbContext.Tests.UpdateAsync(new TestLalala
 await dbContext.Tests.GetByIdAsync(5);
 await dbContext.Tests.DeleteAsync(5);
 
-// Linq like query
+// Link like query NEW version
+     var specificTests = await dbContext.Tests
+         .Where(x => x.TestCd == "Zoko")
+         .OrderBy(x => x.Description)
+         .ExecuteAsync();
+// without where also possible
+ var specificTests = await dbContext.Tests
+         .OrderBy(x => x.Description)
+         .ExecuteAsync();
+// only where also possible
+     var specificTests = await dbContext.Tests
+         .Where(x => x.TestCd == "Zoko")
+// descending
+ var specificTests = await dbContext.Tests
+         .OrderBy(x => x.Description, descending: true)
+         .ExecuteAsync();
+// Linq like query OLD version
 var specificTests = await dbContext.Tests.WhereAsync(x =>x.IsAcive );
 
 // GetAll

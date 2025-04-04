@@ -1,12 +1,12 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using Dapper;
+using DapperOrmCore;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
-using System.Reflection;
-using Dapper;
-using System.Text.RegularExpressions;
 using System.Linq.Expressions;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
-namespace DapperOrmCore;
 public class DapperSet<T> : IDisposable where T : class
 {
     private readonly IDbConnection _connection;
@@ -24,14 +24,14 @@ public class DapperSet<T> : IDisposable where T : class
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _transaction = transaction;
 
-        // validate full table name (with schema if present)
+        // Validate full table name (with schema if present)
         string rawTableName = typeof(T).GetCustomAttribute<TableAttribute>()?.Name ?? typeof(T).Name;
         ParseTableName(rawTableName, out string schema, out string table);
         _schemaName = schema;
         _tableName = ValidateTableName(table);
         _fullTableName = string.IsNullOrEmpty(_schemaName) ? _tableName : $"{_schemaName}.{_tableName}";
 
-        // property mappings with validation
+        // Property mappings with validation
         _propertyMap = typeof(T)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.CanRead && p.CanWrite)
@@ -41,7 +41,7 @@ public class DapperSet<T> : IDisposable where T : class
                 StringComparer.OrdinalIgnoreCase
             );
 
-        // primary key using the database column name and type
+        // Primary key using the database column name and type
         var primaryKeyProperty = typeof(T).GetProperties()
             .FirstOrDefault(p => p.GetCustomAttribute<KeyAttribute>() != null);
         if (primaryKeyProperty == null)
@@ -57,7 +57,7 @@ public class DapperSet<T> : IDisposable where T : class
             throw new InvalidOperationException($"Primary key column '{_primaryKeyColumnName}' not found in entity properties");
         }
 
-        // Dapper column-to-property mapping, otherwise misreads between column name and object name
+        // Dapper column-to-property mapping
         SqlMapper.SetTypeMap(
             typeof(T),
             new CustomPropertyTypeMap(
@@ -233,10 +233,26 @@ public class DapperSet<T> : IDisposable where T : class
         return rowsAffected > 0;
     }
 
+    // Updated Where method to return DapperQuery<T> for chaining
+    public DapperQuery<T> Where(Expression<Func<T, bool>> predicate)
+    {
+        EnsureNotDisposed();
+        return new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap).Where(predicate);
+    }
+
+    // New OrderBy method to return DapperQuery<T> for chaining
+    public DapperQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> orderByExpression, bool descending = false)
+    {
+        EnsureNotDisposed();
+        return new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap)
+            .OrderBy(orderByExpression, descending);
+    }
+
+    // Original WhereAsync (kept for backward compatibility, if needed)
+    [Obsolete("Use the new DapperQuery where syntax instead.")]
     public async Task<IEnumerable<T>> WhereAsync(Expression<Func<T, bool>> predicate)
     {
         EnsureNotDisposed();
-
         var visitor = new WhereExpressionVisitor<T>(_propertyMap);
         var (sqlCondition, parameters) = visitor.Translate(predicate);
 

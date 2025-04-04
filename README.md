@@ -18,6 +18,8 @@ CustomDapperEntityActions bridges the gap between Dapper's lightweight performan
 Install via NuGet Package Manager:
 dotnet add package CustomDapperEntityActions --version 1.0.2
 
+Link to nuget: https://www.nuget.org/packages/CustomDapperEntityActions/
+
 ## How to use
 
 1. Define entities

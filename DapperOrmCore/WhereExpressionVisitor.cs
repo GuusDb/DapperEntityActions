@@ -5,12 +5,14 @@ using System.Reflection;
 using System.Text;
 
 namespace DapperOrmCore;
+
 internal class WhereExpressionVisitor<T> : ExpressionVisitor
 {
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
     private readonly DynamicParameters _parameters;
     private readonly StringBuilder _sqlBuilder;
     private int _paramCounter;
+    private bool _isNegated;
 
     public WhereExpressionVisitor(Dictionary<string, PropertyInfo> propertyMap)
     {
@@ -18,6 +20,7 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
         _parameters = new DynamicParameters();
         _sqlBuilder = new StringBuilder();
         _paramCounter = 0;
+        _isNegated = false;
     }
 
     public (string Sql, DynamicParameters Parameters) Translate(Expression<Func<T, bool>> expression)
@@ -29,7 +32,6 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
     protected override Expression VisitBinary(BinaryExpression node)
     {
         _sqlBuilder.Append("(");
-
         Visit(node.Left);
 
         switch (node.NodeType)
@@ -58,7 +60,6 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
 
         Visit(node.Right);
         _sqlBuilder.Append(")");
-
         return node;
     }
 
@@ -66,10 +67,7 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
     {
         if (node.Expression is ParameterExpression)
         {
-            // Get the C# property name from the expression
             string propertyName = node.Member.Name;
-
-            // Find the corresponding column name in the property map
             var propertyInfo = typeof(T).GetProperties()
                 .FirstOrDefault(p => p.Name == propertyName);
 
@@ -78,10 +76,8 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
                 throw new NotSupportedException($"Property '{propertyName}' not found in type '{typeof(T).Name}'");
             }
 
-            // Get the column name from the [Column] attribute or use the property name as fallback
             string columnName = propertyInfo.GetCustomAttribute<ColumnAttribute>()?.Name ?? propertyName;
 
-            // Verify the column exists in the property map (which uses column names as keys)
             if (!_propertyMap.ContainsKey(columnName))
             {
                 throw new NotSupportedException($"Column '{columnName}' mapped from property '{propertyName}' not found in property map");
@@ -90,6 +86,22 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
             _sqlBuilder.Append(columnName);
         }
         return node;
+    }
+
+    protected override Expression VisitUnary(UnaryExpression node)
+    {
+        if (node.NodeType == ExpressionType.Not)
+        {
+            _isNegated = !_isNegated;
+            Visit(node.Operand);
+            _isNegated = false;
+            return node;
+        }
+        if (node.NodeType == ExpressionType.Convert)
+        {
+            return Visit(node.Operand);
+        }
+        return base.VisitUnary(node);
     }
 
     protected override Expression VisitConstant(ConstantExpression node)
@@ -113,5 +125,20 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
             return node;
         }
         throw new NotSupportedException($"Method '{node.Method.Name}' is not supported");
+    }
+
+    public override Expression? Visit(Expression? node)
+    {
+        if (node is MemberExpression member && member.Type == typeof(bool))
+        {
+            VisitMember(member);
+            _sqlBuilder.Append(" = ");
+            string paramName = $"@p{_paramCounter++}";
+            _sqlBuilder.Append(paramName);
+            bool value = _isNegated ? false : true;
+            _parameters.Add(paramName, value);
+            return node;
+        }
+        return base.Visit(node);
     }
 }

@@ -116,6 +116,18 @@ await dbContext.Tests.DeleteAsync(5);
  var specificTests = await dbContext.Tests
          .OrderBy(x => x.Description, descending: true)
          .ExecuteAsync();
+
+
+// Chaining statements
+ var specificTests = await dbContext.Tests
+     .Where( x => x.TestMode == "Offline")
+     .Where(x => x.IsActive )
+     .OrderBy(x => x.TestType)
+     .OrderBy( x => x.TestMode)
+     .ExecuteAsync();
+
+
+
 // Linq like query OLD version
 var specificTests = await dbContext.Tests.WhereAsync(x =>x.IsAcive );
 

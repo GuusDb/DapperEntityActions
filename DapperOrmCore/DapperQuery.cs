@@ -2,8 +2,10 @@
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text;
 
 namespace DapperOrmCore;
+
 public class DapperQuery<T> where T : class
 {
     private readonly DapperSet<T> _parent;
@@ -11,9 +13,10 @@ public class DapperQuery<T> where T : class
     private readonly IDbTransaction _transaction;
     private readonly string _fullTableName;
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
-    private string _whereClause = string.Empty;
+    private readonly StringBuilder _whereClause = new StringBuilder();
     private DynamicParameters _parameters = new DynamicParameters();
-    private string _orderByClause = string.Empty;
+    private readonly StringBuilder _orderByClause = new StringBuilder();
+    private int _paramCounter = 0;
 
     public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction transaction,
         string fullTableName, Dictionary<string, PropertyInfo> propertyMap)
@@ -29,8 +32,26 @@ public class DapperQuery<T> where T : class
     {
         var visitor = new WhereExpressionVisitor<T>(_propertyMap);
         var (sqlCondition, parameters) = visitor.Translate(predicate);
-        _whereClause = sqlCondition;
-        _parameters = parameters;
+
+        if (_whereClause.Length > 0)
+        {
+            _whereClause.Append(" AND ");
+        }
+
+        var paramMapping = new Dictionary<string, string>();
+        string newSqlCondition = sqlCondition;
+        foreach (var paramName in parameters.ParameterNames)
+        {
+            // Strip the @ from the original paramName if present, since we'll add it once
+            string baseParamName = paramName.StartsWith("@") ? paramName.Substring(1) : paramName;
+            string newParamName = $"p{_paramCounter++}";  // No @ here, we'll add it in the SQL
+            paramMapping[baseParamName] = newParamName;
+            newSqlCondition = newSqlCondition.Replace($"@{baseParamName}", $"@{newParamName}");
+            _parameters.Add(newParamName, parameters.Get<object>(paramName));
+        }
+
+        _whereClause.Append(newSqlCondition);
+
         return this;
     }
 
@@ -51,21 +72,34 @@ public class DapperQuery<T> where T : class
             ?? throw new ArgumentException($"Property '{propertyName}' not found in entity.");
 
         string orderDirection = descending ? "DESC" : "ASC";
-        _orderByClause = $"ORDER BY {columnName} {orderDirection}";
+
+        if (_orderByClause.Length > 0)
+        {
+            _orderByClause.Append(", ");
+        }
+        else
+        {
+            _orderByClause.Append("ORDER BY ");
+        }
+        _orderByClause.Append($"{columnName} {orderDirection}");
+
         return this;
     }
 
     public async Task<IEnumerable<T>> ExecuteAsync()
     {
         string sql = $"SELECT * FROM {_fullTableName}";
-        if (!string.IsNullOrEmpty(_whereClause))
+        if (_whereClause.Length > 0)
         {
             sql += $" WHERE {_whereClause}";
         }
-        if (!string.IsNullOrEmpty(_orderByClause))
+        if (_orderByClause.Length > 0)
         {
             sql += $" {_orderByClause}";
         }
+
+        Console.WriteLine($"Executing SQL: {sql}");
+        Console.WriteLine($"Parameters: {string.Join(", ", _parameters.ParameterNames.Select(n => $"{n}={_parameters.Get<object>(n)}"))}");
 
         return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
     }

@@ -1,11 +1,12 @@
-﻿using Dapper;
-using DapperOrmCore;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
-using System.Linq.Expressions;
 using System.Reflection;
+using Dapper;
 using System.Text.RegularExpressions;
+using System.Linq.Expressions;
+
+namespace DapperOrmCore;
 
 public class DapperSet<T> : IDisposable where T : class
 {

@@ -135,3 +135,10 @@ var specificTests = await dbContext.Tests.WhereAsync(x =>x.IsAcive );
 DbContext.Tests.GetAllAsync
 
 ```
+## Pagination
+```C#
+  var specificTests = await dbContext.Tests
+           // Other linq queries
+            .Paginate(0,50) // paginate(pageIndex, pageSize), this gives records 0-50 
+            .ExecuteAsync();
+```

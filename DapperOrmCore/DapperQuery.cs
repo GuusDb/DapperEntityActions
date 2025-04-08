@@ -17,6 +17,8 @@ public class DapperQuery<T> where T : class
     private DynamicParameters _parameters = new DynamicParameters();
     private readonly StringBuilder _orderByClause = new StringBuilder();
     private int _paramCounter = 0;
+    private int? _pageIndex;
+    private int? _pageSize;
 
     public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction transaction,
         string fullTableName, Dictionary<string, PropertyInfo> propertyMap)
@@ -81,16 +83,40 @@ public class DapperQuery<T> where T : class
         return this;
     }
 
+    public DapperQuery<T> Paginate(int pageIndex, int pageSize)
+    {
+        if (pageIndex < 0)
+        {
+            throw new ArgumentException("Page index cannot be negative.");
+        }
+        if (pageSize <= 0)
+        {
+            throw new ArgumentException("Page size must be greater than zero.");
+        }
+
+        _pageIndex = pageIndex;
+        _pageSize = pageSize;
+        return this;
+    }
+
     public async Task<IEnumerable<T>> ExecuteAsync()
     {
         string sql = $"SELECT * FROM {_fullTableName}";
+
         if (_whereClauses.Any())
         {
             sql += $" WHERE {string.Join(" AND ", _whereClauses)}";
         }
+
         if (_orderByClause.Length > 0)
         {
             sql += $" {_orderByClause}";
+        }
+
+        if (_pageIndex.HasValue && _pageSize.HasValue)
+        {
+            int offset = _pageIndex.Value * _pageSize.Value;
+            sql += $" LIMIT {_pageSize.Value} OFFSET {offset}";
         }
 
         Console.WriteLine($"Executing SQL: {sql}");

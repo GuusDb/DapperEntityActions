@@ -13,7 +13,7 @@ public class DapperQuery<T> where T : class
     private readonly IDbTransaction _transaction;
     private readonly string _fullTableName;
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
-    private readonly StringBuilder _whereClause = new StringBuilder();
+    private readonly List<string> _whereClauses = new List<string>();
     private DynamicParameters _parameters = new DynamicParameters();
     private readonly StringBuilder _orderByClause = new StringBuilder();
     private int _paramCounter = 0;
@@ -33,24 +33,18 @@ public class DapperQuery<T> where T : class
         var visitor = new WhereExpressionVisitor<T>(_propertyMap);
         var (sqlCondition, parameters) = visitor.Translate(predicate);
 
-        if (_whereClause.Length > 0)
-        {
-            _whereClause.Append(" AND ");
-        }
-
         var paramMapping = new Dictionary<string, string>();
         string newSqlCondition = sqlCondition;
         foreach (var paramName in parameters.ParameterNames)
         {
-            // Strip the @ from the original paramName if present, since we'll add it once
             string baseParamName = paramName.StartsWith("@") ? paramName.Substring(1) : paramName;
-            string newParamName = $"p{_paramCounter++}";  // No @ here, we'll add it in the SQL
+            string newParamName = $"p{_paramCounter++}";
             paramMapping[baseParamName] = newParamName;
             newSqlCondition = newSqlCondition.Replace($"@{baseParamName}", $"@{newParamName}");
             _parameters.Add(newParamName, parameters.Get<object>(paramName));
         }
 
-        _whereClause.Append(newSqlCondition);
+        _whereClauses.Add(newSqlCondition);
 
         return this;
     }
@@ -81,6 +75,7 @@ public class DapperQuery<T> where T : class
         {
             _orderByClause.Append("ORDER BY ");
         }
+
         _orderByClause.Append($"{columnName} {orderDirection}");
 
         return this;
@@ -89,9 +84,9 @@ public class DapperQuery<T> where T : class
     public async Task<IEnumerable<T>> ExecuteAsync()
     {
         string sql = $"SELECT * FROM {_fullTableName}";
-        if (_whereClause.Length > 0)
+        if (_whereClauses.Any())
         {
-            sql += $" WHERE {_whereClause}";
+            sql += $" WHERE {string.Join(" AND ", _whereClauses)}";
         }
         if (_orderByClause.Length > 0)
         {

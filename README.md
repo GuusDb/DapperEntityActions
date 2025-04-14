@@ -142,3 +142,6 @@ DbContext.Tests.GetAllAsync
             .Paginate(0,50) // paginate(pageIndex, pageSize), this gives records 0-50 
             .ExecuteAsync();
 ```
+
+## Logging
+If you want to log the queries, you need to put miminum log level to "Information" and use serilog.

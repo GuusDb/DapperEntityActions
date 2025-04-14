@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Serilog;
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -119,8 +120,8 @@ public class DapperQuery<T> where T : class
             sql += $" LIMIT {_pageSize.Value} OFFSET {offset}";
         }
 
-        Console.WriteLine($"Executing SQL: {sql}");
-        Console.WriteLine($"Parameters: {string.Join(", ", _parameters.ParameterNames.Select(n => $"{n}={_parameters.Get<object>(n)}"))}");
+        Log.Information($"Executing SQL: {sql}");
+        Log.Information($"Parameters: {string.Join(", ", _parameters.ParameterNames.Select(n => $"{n}={_parameters.Get<object>(n)}"))}");
 
         return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
     }

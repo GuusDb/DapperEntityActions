@@ -100,7 +100,7 @@ var update = await dbContext.Tests.UpdateAsync(new TestLalala
 await dbContext.Tests.GetByIdAsync(5);
 await dbContext.Tests.DeleteAsync(5);
 
-// Link like query NEW version
+// Linq like query NEW version
      var specificTests = await dbContext.Tests
          .Where(x => x.TestCd == "Zoko")
          .OrderBy(x => x.Description)

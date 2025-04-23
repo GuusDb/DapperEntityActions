@@ -83,7 +83,8 @@ internal class WhereExpressionVisitor<T> : ExpressionVisitor
                 throw new NotSupportedException($"Column '{columnName}' mapped from property '{propertyName}' not found in property map");
             }
 
-            _sqlBuilder.Append(columnName);
+            // Prefix column name with main table alias 't.' to avoid ambiguity
+            _sqlBuilder.Append($"t.{columnName}");
         }
         return node;
     }

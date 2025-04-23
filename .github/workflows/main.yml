@@ -1,0 +1,46 @@
+name: Release NuGet Package
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed for creating Git tags
+    steps:
+      # Checkout the repository with full history for MinVer
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for accurate versioning
+
+      # Set up .NET SDK
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # Restore dependencies
+      - name: Restore
+        run: dotnet restore dapperEfLike.sln
+
+      # Build the solution
+      - name: Build
+        run: dotnet build dapperEfLike.sln --configuration Release --no-restore
+
+      # Run tests
+      - name: Test
+        run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore
+
+      # Pack the DapperOrmCore project with MinVer version
+      - name: Pack
+        run: dotnet pack DapperOrmCore/DapperOrmCore.csproj --configuration Release --no-build --no-restore -o ./nupkgs
+
+      # Push the NuGet package to NuGet.org
+      - name: Push
+        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

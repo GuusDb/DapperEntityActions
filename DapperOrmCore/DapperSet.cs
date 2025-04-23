@@ -1,10 +1,12 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Reflection;
 using Dapper;
 using System.Text.RegularExpressions;
 using System.Linq.Expressions;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace DapperOrmCore;
 
@@ -18,6 +20,8 @@ public class DapperSet<T> : IDisposable where T : class
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
     private readonly string _primaryKeyColumnName;
     private readonly Type _primaryKeyType;
+    private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;
+    private readonly DapperQuery<T> _query;
     private bool _disposed = false;
 
     public DapperSet(IDbConnection connection, IDbTransaction transaction = null)
@@ -35,7 +39,7 @@ public class DapperSet<T> : IDisposable where T : class
         // Property mappings with validation
         _propertyMap = typeof(T)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead && p.CanWrite)
+            .Where(p => p.CanRead && p.CanWrite && p.GetCustomAttribute<NotMappedAttribute>() == null)
             .ToDictionary(
                 p => ValidateColumnName(p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name),
                 p => p,
@@ -58,6 +62,56 @@ public class DapperSet<T> : IDisposable where T : class
             throw new InvalidOperationException($"Primary key column '{_primaryKeyColumnName}' not found in entity properties");
         }
 
+        // Navigation properties
+        _navigationProperties = new Dictionary<string, NavigationPropertyInfo>();
+        foreach (var prop in typeof(T).GetProperties().Where(p => p.GetCustomAttribute<NotMappedAttribute>() != null))
+        {
+            string fkColumn = null;
+
+            // Check for [ForeignKey] attribute
+            var fkAttribute = prop.GetCustomAttribute<ForeignKeyAttribute>();
+            if (fkAttribute != null)
+            {
+                fkColumn = fkAttribute.Name;
+            }
+            else
+            {
+                // Fallback to convention: try <RelatedEntityName>Id or <RelatedEntityName>_cd
+                var possibleFkNames = new[]
+                {
+                    $"{prop.PropertyType.Name}Id",
+                    $"{prop.PropertyType.Name}_cd",
+                    $"{prop.Name}Id",
+                    $"{prop.Name}_cd"
+                };
+
+                var fkProp = typeof(T).GetProperties()
+                    .FirstOrDefault(p => possibleFkNames.Any(fk => string.Equals(
+                        p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name,
+                        fk,
+                        StringComparison.OrdinalIgnoreCase)));
+
+                if (fkProp != null)
+                {
+                    fkColumn = fkProp.GetCustomAttribute<ColumnAttribute>()?.Name ?? fkProp.Name;
+                }
+            }
+
+            if (fkColumn != null && _propertyMap.ContainsKey(fkColumn))
+            {
+                _navigationProperties[prop.Name] = new NavigationPropertyInfo
+                {
+                    Property = prop,
+                    RelatedType = prop.PropertyType,
+                    ForeignKeyColumn = fkColumn,
+                    RelatedTableName = prop.PropertyType.GetCustomAttribute<TableAttribute>()?.Name ?? prop.PropertyType.Name
+                };
+            }
+        }
+
+        // Initialize internal query builder
+        _query = new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap, _navigationProperties);
+
         // Dapper column-to-property mapping
         SqlMapper.SetTypeMap(
             typeof(T),
@@ -69,7 +123,14 @@ public class DapperSet<T> : IDisposable where T : class
         );
     }
 
-    // Parse schema.table notation
+    public class NavigationPropertyInfo
+    {
+        public PropertyInfo Property { get; set; }
+        public Type RelatedType { get; set; }
+        public string ForeignKeyColumn { get; set; }
+        public string RelatedTableName { get; set; }
+    }
+
     private void ParseTableName(string rawName, out string schema, out string table)
     {
         if (string.IsNullOrWhiteSpace(rawName))
@@ -95,6 +156,38 @@ public class DapperSet<T> : IDisposable where T : class
         }
     }
 
+    // Query-building methods delegated to internal DapperQuery<T>
+    public DapperSet<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty)
+    {
+        _query.Include(navigationProperty);
+        return this;
+    }
+
+    public DapperSet<T> Where(Expression<Func<T, bool>> predicate)
+    {
+        _query.Where(predicate);
+        return this;
+    }
+
+    public DapperSet<T> OrderBy<TKey>(Expression<Func<T, TKey>> orderByExpression, bool descending = false)
+    {
+        _query.OrderBy(orderByExpression, descending);
+        return this;
+    }
+
+    public DapperSet<T> Paginate(int pageIndex, int pageSize)
+    {
+        _query.Paginate(pageIndex, pageSize);
+        return this;
+    }
+
+    public async Task<IEnumerable<T>> ExecuteAsync()
+    {
+        EnsureNotDisposed();
+        return await _query.ExecuteAsync();
+    }
+
+    // Entity operation methods
     public async Task<T> GetByIdWithRelatedAsync<TKey>(TKey id, string relatedTableFullName, string foreignKey, string splitOn)
     {
         EnsureNotDisposed();
@@ -132,7 +225,7 @@ public class DapperSet<T> : IDisposable where T : class
         return await _connection.QueryAsync<T>(sql, transaction: _transaction);
     }
 
-    public async Task<T> GetByIdAsync<TKey>(TKey id)
+    public async Task<T?> GetByIdAsync<TKey>(TKey id)
     {
         EnsureNotDisposed();
         if (id == null)
@@ -232,33 +325,6 @@ public class DapperSet<T> : IDisposable where T : class
         }
 
         return rowsAffected > 0;
-    }
-
-    // Updated Where method to return DapperQuery<T> for chaining
-    public DapperQuery<T> Where(Expression<Func<T, bool>> predicate)
-    {
-        EnsureNotDisposed();
-        return new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap).Where(predicate);
-    }
-
-    // New OrderBy method to return DapperQuery<T> for chaining
-    public DapperQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> orderByExpression, bool descending = false)
-    {
-        EnsureNotDisposed();
-        return new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap)
-            .OrderBy(orderByExpression, descending);
-    }
-
-    // Original WhereAsync (kept for backward compatibility, if needed)
-    [Obsolete("Use the new DapperQuery where syntax instead.")]
-    public async Task<IEnumerable<T>> WhereAsync(Expression<Func<T, bool>> predicate)
-    {
-        EnsureNotDisposed();
-        var visitor = new WhereExpressionVisitor<T>(_propertyMap);
-        var (sqlCondition, parameters) = visitor.Translate(predicate);
-
-        string sql = $"SELECT * FROM {_fullTableName} WHERE {sqlCondition}";
-        return await _connection.QueryAsync<T>(sql, parameters, transaction: _transaction);
     }
 
     private string ValidateSchemaName(string name)

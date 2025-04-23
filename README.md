@@ -145,3 +145,49 @@ DbContext.Tests.GetAllAsync
 
 ## Logging
 If you want to log the queries, you need to put miminum log level to "Information" and use serilog.
+
+## JOIN
+ 
+Joins can be done with the include tag  (only one to one mapping currently one to many is for future features )
+```C#
+   var measurements = await dbContext.Measurements
+          .Include(x => x.Test)
+          .Include(x => x.Plant)
+          // then you can also filter only on the parent
+          .Where(x => x.Value > 100)
+          .OrderBy(x => x.MeasurementDate)
+          .Paginate(0, 2)
+          .ExecuteAsync();
+```
+
+Classes need to be annotated like this with the NotMapped and ForeignKey tag
+```C#
+ [Table("ipc.measurement")]
+public class CoolMeasurement
+{
+    [Key]
+    [Column("id")]
+    public int Id { get; set; }
+
+    [Column("test_cd")]
+    public required string TestCd { get; set; }
+
+    [Column("plant_cd")]
+    public required string PlantCd { get; set; }
+
+    [Column("avg_value")]
+    public double Value { get; set; }
+
+    [Column("measurement_date")]
+    public DateTime MeasurementDate { get; set; } = DateTime.UtcNow;
+
+    [NotMapped]
+    [ForeignKey("test_cd")]
+    public TestLalala Test { get; set; }
+
+    [NotMapped]
+    [ForeignKey("plant_cd")]
+    public Plant Plant { get; set; }
+}
+
+```

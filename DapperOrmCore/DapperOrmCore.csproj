@@ -8,7 +8,7 @@
     <RepositoryUrl>https://github.com/GuusDb/DapperEntityActions</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>Dapper, ORM, EFCore Alternative, SQL</PackageTags>
+    <PackageTags>Dapper, ORM, EFCore Alternative, SQL, postgres</PackageTags>
     <VersionPrefix>1.0.10</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <ImplicitUsings>enable</ImplicitUsings>

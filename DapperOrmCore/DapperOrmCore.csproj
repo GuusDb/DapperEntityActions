@@ -9,7 +9,8 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>Dapper, ORM, EFCore Alternative, SQL</PackageTags>
-    <Version>1.0.9</Version>
+    <VersionPrefix>1.0.10</VersionPrefix>
+    <VersionSuffix></VersionSuffix>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>

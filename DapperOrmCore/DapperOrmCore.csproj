@@ -15,7 +15,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <MinVerAutoIncrement>patch</MinVerAutoIncrement>
-    <MinVerMinimumMajorMinor>1.0.10</MinVerMinimumMajorMinor>
+    <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
   </PropertyGroup>

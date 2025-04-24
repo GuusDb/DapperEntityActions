@@ -8,12 +8,14 @@
     <RepositoryUrl>https://github.com/GuusDb/DapperEntityActions</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>Dapper, ORM, EFCore Alternative, SQL, postgres</PackageTags>
+    <PackageTags>Dapper;ORM;EFCore Alternative;SQL;postgres</PackageTags>
     <VersionPrefix>1.0.10</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
+    <MinVerAutoIncrement>patch</MinVerAutoIncrement>
+    <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
   </PropertyGroup>
 
   <ItemGroup>

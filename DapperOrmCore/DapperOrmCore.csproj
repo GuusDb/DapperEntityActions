@@ -16,6 +16,8 @@
     <IsPackable>true</IsPackable>
     <MinVerAutoIncrement>patch</MinVerAutoIncrement>
     <MinVerMinimumMajorMinor>1.0.10</MinVerMinimumMajorMinor>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
   </PropertyGroup>
 
   <ItemGroup>

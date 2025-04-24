@@ -18,6 +18,7 @@
     <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
+    <MinVerSkipPreRelease>true</MinVerSkipPreRelease>
   </PropertyGroup>
 
   <ItemGroup>

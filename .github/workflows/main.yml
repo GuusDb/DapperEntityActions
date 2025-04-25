@@ -27,7 +27,7 @@ jobs:
 
       - name: Calculate Version
         id: minver
-        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0)" >> $GITHUB_OUTPUT
+        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0 --auto-increment patch)" >> $GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore dapperEfLike.sln

@@ -5,8 +5,7 @@ using System.Reflection;
 using Dapper;
 using System.Text.RegularExpressions;
 using System.Linq.Expressions;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using DapperOrmCore.Models;
 
 namespace DapperOrmCore;
 
@@ -123,13 +122,7 @@ public class DapperSet<T> : IDisposable where T : class
         );
     }
 
-    public class NavigationPropertyInfo
-    {
-        public PropertyInfo Property { get; set; }
-        public Type RelatedType { get; set; }
-        public string ForeignKeyColumn { get; set; }
-        public string RelatedTableName { get; set; }
-    }
+    
 
     private void ParseTableName(string rawName, out string schema, out string table)
     {

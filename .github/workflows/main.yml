@@ -28,7 +28,8 @@ jobs:
       - name: Get Version
         id: minver
         run: |
-          echo "VERSION=$(minver -t v)" >> $GITHUB_OUTPUT
+          VERSION=$(minver -t v --default-pre-release-phase "" --minimum-major-minor 1.0)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore dapperEfLike.sln

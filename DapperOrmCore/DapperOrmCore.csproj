@@ -18,6 +18,8 @@
     <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
     <MinVerSkipPreRelease>true</MinVerSkipPreRelease>
     <MinVerIgnoreHeight>true</MinVerIgnoreHeight>
+    <MinVerVerbosity>detailed</MinVerVerbosity>
+    <MinVerBuildMetadata></MinVerBuildMetadata>
   </PropertyGroup>
 
   <ItemGroup>

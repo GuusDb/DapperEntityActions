@@ -12,6 +12,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
+    
+    <!-- Semantic Versioning Configuration -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
     <MinVerAutoIncrement>minor</MinVerAutoIncrement>
@@ -20,6 +22,12 @@
     <MinVerIgnoreHeight>true</MinVerIgnoreHeight>
     <MinVerVerbosity>detailed</MinVerVerbosity>
     <MinVerBuildMetadata></MinVerBuildMetadata>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +36,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <None Include="..\README.md" Pack="true" PackagePath="\" />

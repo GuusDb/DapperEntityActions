@@ -28,8 +28,15 @@ jobs:
       - name: Get Version
         id: minver
         run: |
-          VERSION=$(minver -t v --default-pre-release-phase "" --minimum-major-minor 1.0)
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          # Get the version without any pre-release identifiers
+          VERSION=$(minver -t v --default-pre-release-phase "" --minimum-major-minor 1.0 --verbosity detailed)
+          echo "Raw version from MinVer: $VERSION"
+
+          # Strip any pre-release or build metadata if present
+          CLEAN_VERSION=$(echo $VERSION | cut -d '-' -f1 | cut -d '+' -f1)
+          echo "Clean version: $CLEAN_VERSION"
+
+          echo "VERSION=$CLEAN_VERSION" >> $GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore dapperEfLike.sln
@@ -41,18 +48,32 @@ jobs:
         run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore
 
       - name: Pack
-        run: dotnet pack DapperOrmCore/DapperOrmCore.csproj --configuration Release --no-build --no-restore -o ./nupkgs -p:Version=${{ steps.minver.outputs.VERSION }}
+        run: |
+          dotnet pack DapperOrmCore/DapperOrmCore.csproj \
+            --configuration Release \
+            --no-build \
+            --no-restore \
+            -o ./nupkgs \
+            -p:Version=${{ steps.minver.outputs.VERSION }} \
+            -p:IncludeSymbols=true \
+            -p:SymbolPackageFormat=snupkg
 
       - name: Create Git Tag if it doesn't exist
         run: |
           if ! git rev-parse "v${{ steps.minver.outputs.VERSION }}" >/dev/null 2>&1; then
-            git tag v${{ steps.minver.outputs.VERSION }}
-            git push origin v${{ steps.minver.outputs.VERSION }}
+            git config --global user.email "actions@github.com"
+            git config --global user.name "GitHub Actions"
+            git tag -a "v${{ steps.minver.outputs.VERSION }}" -m "Release v${{ steps.minver.outputs.VERSION }}"
+            git push origin "v${{ steps.minver.outputs.VERSION }}"
           else
             echo "Tag v${{ steps.minver.outputs.VERSION }} already exists. Skipping tag creation."
           fi
 
-      - name: Push
-        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+      - name: Push Packages
+        run: |
+          # Push the main package
+          dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          # Push the symbol package
+          dotnet nuget push "./nupkgs/*.snupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

@@ -1,4 +1,7 @@
 ﻿using Dapper;
+using DapperOrmCore;
+using DapperOrmCore.Models;
+using DapperOrmCore.Visitors;
 using Serilog;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
@@ -7,7 +10,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 
-namespace DapperOrmCore;
 
 public class DapperQuery<T> where T : class
 {
@@ -16,18 +18,19 @@ public class DapperQuery<T> where T : class
     private readonly IDbTransaction _transaction;
     private readonly string _fullTableName;
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
-    private readonly Dictionary<string, DapperSet<T>.NavigationPropertyInfo> _navigationProperties;
+    private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;
     private readonly List<string> _whereClauses = new List<string>();
     private DynamicParameters _parameters = new DynamicParameters();
     private readonly StringBuilder _orderByClause = new StringBuilder();
     private readonly List<string> _includedProperties = new List<string>();
+    private readonly List<string> _referencedNavProps = new List<string>();
     private int _paramCounter = 0;
     private int? _pageIndex;
     private int? _pageSize;
 
     public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction transaction,
         string fullTableName, Dictionary<string, PropertyInfo> propertyMap,
-        Dictionary<string, DapperSet<T>.NavigationPropertyInfo> navigationProperties)
+        Dictionary<string, NavigationPropertyInfo> navigationProperties)
     {
         _parent = parent;
         _connection = connection;
@@ -39,7 +42,16 @@ public class DapperQuery<T> where T : class
 
     public DapperQuery<T> Where(Expression<Func<T, bool>> predicate)
     {
-        var visitor = new WhereExpressionVisitor<T>(_propertyMap);
+        // Extract navigation properties from the predicate
+        var navProps = new NavigationPropertyExtractor(_navigationProperties.Keys.ToList())
+            .Extract(predicate);
+        foreach (var navProp in navProps)
+        {
+            if (!_referencedNavProps.Contains(navProp))
+                _referencedNavProps.Add(navProp);
+        }
+
+        var visitor = new WhereExpressionVisitor<T>(_propertyMap, _navigationProperties, _referencedNavProps);
         var (sqlCondition, parameters) = visitor.Translate(predicate);
 
         var paramMapping = new Dictionary<string, string>();
@@ -104,7 +116,10 @@ public class DapperQuery<T> where T : class
             throw new ArgumentException($"Navigation property '{propertyName}' not found.");
         }
 
-        _includedProperties.Add(propertyName);
+        if (!_includedProperties.Contains(propertyName))
+        {
+            _includedProperties.Add(propertyName);
+        }
         return this;
     }
 
@@ -129,50 +144,50 @@ public class DapperQuery<T> where T : class
         var sqlBuilder = new StringBuilder();
         var selectColumns = new List<string> { $"t.*" };
         var joins = new List<string>();
-        var splitOn = new List<string> { "id" }; // Default split column
+        var splitOn = new List<string> { "id" };
         var types = new List<Type> { typeof(T) };
         var mappings = new List<Func<object[], T>>();
 
-        // Ensure the main table is always included with alias 't'
-        sqlBuilder.Append($"SELECT t.*");
-        string fromClause = $" FROM {_fullTableName} t";
+        // Combine included and referenced navigation properties
+        var allNavProps = _includedProperties.Union(_referencedNavProps).Distinct().ToList();
 
-        // Handle included navigation properties
-        for (int i = 0; i < _includedProperties.Count; i++)
+        // Handle navigation properties
+        for (int i = 0; i < allNavProps.Count; i++)
         {
-            var navProp = _navigationProperties[_includedProperties[i]];
+            var navProp = _navigationProperties[allNavProps[i]];
             string alias = $"r{i + 1}";
             string relatedTable = navProp.RelatedTableName;
             string fkColumn = navProp.ForeignKeyColumn;
 
-            // Assume related table has a primary key column named after its entity (e.g., test_cd, plant_cd)
             string relatedPkColumn = navProp.RelatedType.GetProperties()
                 .FirstOrDefault(p => p.GetCustomAttribute<KeyAttribute>() != null)
                 ?.GetCustomAttribute<ColumnAttribute>()?.Name
                 ?? throw new InvalidOperationException($"Primary key not found for {navProp.RelatedType.Name}");
 
             joins.Add($"LEFT JOIN {relatedTable} {alias} ON t.{fkColumn} = {alias}.{relatedPkColumn}");
-            selectColumns.Add($"{alias}.*");
-            splitOn.Add(relatedPkColumn);
-            types.Add(navProp.RelatedType);
 
-            // Create mapping function
-            int index = i + 1;
-            mappings.Add(objects =>
+            if (_includedProperties.Contains(allNavProps[i]))
             {
-                var entity = (T)objects[0];
-                if (objects[index] != null)
+                selectColumns.Add($"{alias}.*");
+                splitOn.Add(relatedPkColumn);
+                types.Add(navProp.RelatedType);
+
+                int index = i + 1;
+                mappings.Add(objects =>
                 {
-                    navProp.Property.SetValue(entity, objects[index]);
-                }
-                return entity;
-            });
+                    var entity = (T)objects[0];
+                    if (objects[index] != null)
+                    {
+                        navProp.Property.SetValue(entity, objects[index]);
+                    }
+                    return entity;
+                });
+            }
         }
 
         // Build the final SQL query
-        sqlBuilder.Clear(); // Clear any previous content
         sqlBuilder.Append($"SELECT {string.Join(", ", selectColumns)}");
-        sqlBuilder.Append(fromClause); // Ensure FROM clause is always included
+        sqlBuilder.Append($" FROM {_fullTableName} t");
         if (joins.Any())
         {
             sqlBuilder.Append(" " + string.Join(" ", joins));
@@ -254,3 +269,4 @@ public class DapperQuery<T> where T : class
         }
     }
 }
+

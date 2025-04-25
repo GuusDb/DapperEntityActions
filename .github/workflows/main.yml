@@ -23,6 +23,17 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      # Install MinVer CLI
+      - name: Install MinVer
+        run: dotnet tool install --global MinVer
+
+      # Calculate version using MinVer
+      - name: Calculate Version
+        id: minver
+        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0)" >> $GITHUB_OUTPUT
+        env:
+          MINVER_DEFAULT_PRERELEASE_PHASE: ''
+
       # Restore dependencies
       - name: Restore
         run: dotnet restore dapperEfLike.sln
@@ -35,9 +46,15 @@ jobs:
       - name: Test
         run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore
 
-      # Pack the DapperOrmCore project with MinVer version
+      # Pack the DapperOrmCore project with the calculated version
       - name: Pack
-        run: dotnet pack DapperOrmCore/DapperOrmCore.csproj --configuration Release --no-build --no-restore -o ./nupkgs
+        run: dotnet pack DapperOrmCore/DapperOrmCore.csproj --configuration Release --no-build --no-restore -o ./nupkgs -p:Version=${{ steps.minver.outputs.VERSION }}
+
+      # Create and push Git tag
+      - name: Create Git Tag
+        run: |
+          git tag v${{ steps.minver.outputs.VERSION }}
+          git push origin v${{ steps.minver.outputs.VERSION }}
 
       # Push the NuGet package to NuGet.org
       - name: Push

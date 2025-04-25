@@ -36,13 +36,21 @@ jobs:
           CLEAN_VERSION=$(echo $VERSION | cut -d '-' -f1 | cut -d '+' -f1)
           echo "Clean version: $CLEAN_VERSION"
 
-          echo "VERSION=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          # Increment patch version since this is a fix commit
+          MAJOR=$(echo $CLEAN_VERSION | cut -d. -f1)
+          MINOR=$(echo $CLEAN_VERSION | cut -d. -f2)
+          PATCH=$(echo $CLEAN_VERSION | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          echo "New version: $NEW_VERSION"
+
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore dapperEfLike.sln
 
       - name: Build
-        run: dotnet build dapperEfLike.sln --configuration Release --no-restore
+        run: dotnet build dapperEfLike.sln --configuration Release --no-restore -p:Version=${{ steps.minver.outputs.VERSION }}
 
       - name: Test
         run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore
@@ -72,8 +80,8 @@ jobs:
       - name: Push Packages
         run: |
           # Push the main package
-          dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
           # Push the symbol package
-          dotnet nuget push "./nupkgs/*.snupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          dotnet nuget push "./nupkgs/*.snupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

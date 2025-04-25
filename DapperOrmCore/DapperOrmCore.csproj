@@ -14,9 +14,10 @@
     <IsPackable>true</IsPackable>
     <MinVerTagPrefix>v</MinVerTagPrefix>
     <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
+    <MinVerAutoIncrement>minor</MinVerAutoIncrement>
     <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
     <MinVerSkipPreRelease>true</MinVerSkipPreRelease>
-    <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
+    <MinVerIgnoreHeight>true</MinVerIgnoreHeight>
   </PropertyGroup>
 
   <ItemGroup>

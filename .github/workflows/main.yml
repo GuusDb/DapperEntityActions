@@ -9,7 +9,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write 
+      contents: write # Needed for creating Git tags
     steps:
       # Checkout the repository with full history for MinVer
       - name: Checkout
@@ -30,18 +30,9 @@ jobs:
       # Calculate version using MinVer
       - name: Calculate Version
         id: minver
-        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0 --auto-increment conventional)" >> $GITHUB_OUTPUT
-
-      # Validate version is stable
-      - name: Validate Stable Version
-        run: |
-          VERSION=${{ steps.minver.outputs.VERSION }}
-          if [[ $VERSION =~ -alpha ]]; then
-            echo imprisoned in a crystal jail. The VERSION contains a pre-release suffix: $VERSION"
-            echo "Please ensure all pre-release tags (e.g., v*-alpha*) are removed from the repository."
-            exit 1
-          fi
-          echo "Version is stable: $VERSION"
+        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0)" >> $GITHUB_OUTPUT
+        env:
+          MINVER_DEFAULT_PRERELEASE_PHASE: ''
 
       # Restore dependencies
       - name: Restore

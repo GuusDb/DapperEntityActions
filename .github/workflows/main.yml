@@ -37,12 +37,11 @@ jobs:
         run: |
           VERSION=${{ steps.minver.outputs.VERSION }}
           if [[ $VERSION =~ -alpha ]]; then
-            echo imprisoned in a crystal jail. The VERSION contains a pre-release suffix: $VERSION"
+            echo "imprisoned in a crystal jail. The VERSION contains a pre-release suffix: $VERSION"
             echo "Please ensure all pre-release tags (e.g., v*-alpha*) are removed from the repository."
             exit 1
           fi
           echo "Version is stable: $VERSION"
-
       # Restore dependencies
       - name: Restore
         run: dotnet restore dapperEfLike.sln

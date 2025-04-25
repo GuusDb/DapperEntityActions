@@ -27,7 +27,7 @@ jobs:
 
       - name: Calculate Version
         id: minver
-        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0 --default-pre-release-phase '')" >> $GITHUB_OUTPUT
+        run: echo "VERSION=$(minver --tag-prefix v --minimum-major-minor 1.0 --auto-increment patch)" >> $GITHUB_OUTPUT
 
       - name: Restore
         run: dotnet restore dapperEfLike.sln
@@ -41,10 +41,14 @@ jobs:
       - name: Pack
         run: dotnet pack DapperOrmCore/DapperOrmCore.csproj --configuration Release --no-build --no-restore -o ./nupkgs -p:Version=${{ steps.minver.outputs.VERSION }}
 
-      - name: Create Git Tag
+      - name: Create Git Tag if it doesn't exist
         run: |
-          git tag v${{ steps.minver.outputs.VERSION }}
-          git push origin v${{ steps.minver.outputs.VERSION }}
+          if ! git rev-parse "v${{ steps.minver.outputs.VERSION }}" >/dev/null 2>&1; then
+            git tag v${{ steps.minver.outputs.VERSION }}
+            git push origin v${{ steps.minver.outputs.VERSION }}
+          else
+            echo "Tag v${{ steps.minver.outputs.VERSION }} already exists. Skipping tag creation."
+          fi
 
       - name: Push
         run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json

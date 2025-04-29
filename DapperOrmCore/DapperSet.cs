@@ -9,6 +9,10 @@ using DapperOrmCore.Models;
 
 namespace DapperOrmCore;
 
+/// <summary>
+/// A generic class for performing CRUD operations and building queries on a database table using Dapper.
+/// </summary>
+/// <typeparam name="T">The entity type representing the database table.</typeparam>
 public class DapperSet<T> : IDisposable where T : class
 {
     private readonly IDbConnection _connection;
@@ -23,6 +27,14 @@ public class DapperSet<T> : IDisposable where T : class
     private readonly DapperQuery<T> _query;
     private bool _disposed = false;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperSet{T}"/> class.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="transaction">An optional database transaction to associate with operations.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
+    /// <exception cref="ArgumentException">Thrown when the table or schema name is invalid.</exception>
     public DapperSet(IDbConnection connection, IDbTransaction transaction = null)
     {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
@@ -149,38 +161,78 @@ public class DapperSet<T> : IDisposable where T : class
         }
     }
 
-    // Query-building methods delegated to internal DapperQuery<T>
+    /// <summary>
+    /// Includes a related entity in the query results via a navigation property.
+    /// </summary>
+    /// <typeparam name="TProperty">The type of the navigation property.</typeparam>
+    /// <param name="navigationProperty">An expression specifying the navigation property to include.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperSet<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty)
     {
         _query.Include(navigationProperty);
         return this;
     }
 
+    /// <summary>
+    /// Filters the query results based on a predicate.
+    /// </summary>
+    /// <param name="predicate">An expression specifying the filter condition.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperSet<T> Where(Expression<Func<T, bool>> predicate)
     {
         _query.Where(predicate);
         return this;
     }
 
+    /// <summary>
+    /// Orders the query results by a specified property.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the property to order by.</typeparam>
+    /// <param name="orderByExpression">An expression specifying the property to order by.</param>
+    /// <param name="descending">If true, orders the results in descending order; otherwise, ascending.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperSet<T> OrderBy<TKey>(Expression<Func<T, TKey>> orderByExpression, bool descending = false)
     {
         _query.OrderBy(orderByExpression, descending);
         return this;
     }
 
+
+    /// <summary>
+    /// Paginates the query results.
+    /// </summary>
+    /// <param name="pageIndex">The zero-based index of the page to retrieve.</param>
+    /// <param name="pageSize">The number of records per page.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="pageIndex"/> is negative or <paramref name="pageSize"/> is not positive.</exception>
     public DapperSet<T> Paginate(int pageIndex, int pageSize)
     {
         _query.Paginate(pageIndex, pageSize);
         return this;
     }
 
+    /// <summary>
+    /// Executes the query and returns the results.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     public async Task<IEnumerable<T>> ExecuteAsync()
     {
         EnsureNotDisposed();
         return await _query.ExecuteAsync();
     }
 
-    // Entity operation methods
+    /// <summary>
+    /// Retrieves an entity by its primary key, including related data.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="id">The primary key value of the entity.</param>
+    /// <param name="relatedTableFullName">The full name of the related table (e.g., 'schema.table').</param>
+    /// <param name="foreignKey">The foreign key column in the related table.</param>
+    /// <param name="splitOn">The column name to split the result set for multi-mapping.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the entity with related data, or null if not found.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
     public async Task<T> GetByIdWithRelatedAsync<TKey>(TKey id, string relatedTableFullName, string foreignKey, string splitOn)
     {
         EnsureNotDisposed();
@@ -211,6 +263,11 @@ public class DapperSet<T> : IDisposable where T : class
         return lookup.Values.FirstOrDefault();
     }
 
+    /// <summary>
+    /// Retrieves all entities from the table.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation, containing all entities.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     public async Task<IEnumerable<T?>> GetAllAsync()
     {
         EnsureNotDisposed();
@@ -218,6 +275,15 @@ public class DapperSet<T> : IDisposable where T : class
         return await _connection.QueryAsync<T>(sql, transaction: _transaction);
     }
 
+    /// <summary>
+    /// Retrieves an entity by its primary key.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="id">The primary key value of the entity.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the entity, or null if not found.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
     public async Task<T?> GetByIdAsync<TKey>(TKey id)
     {
         EnsureNotDisposed();
@@ -235,6 +301,16 @@ public class DapperSet<T> : IDisposable where T : class
         return await _connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, _transaction);
     }
 
+    /// <summary>
+    /// Inserts a new entity into the table and returns its primary key.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="entity">The entity to insert.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the primary key of the inserted entity.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entity"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no columns are available for insertion or the insert operation fails.</exception>
     public async Task<TKey> InsertAsync<TKey>(T entity)
     {
         EnsureNotDisposed();
@@ -273,6 +349,14 @@ public class DapperSet<T> : IDisposable where T : class
         }
     }
 
+    /// <summary>
+    /// Updates an existing entity in the table.
+    /// </summary>
+    /// <param name="entity">The entity to update.</param>
+    /// <returns>A task that represents the asynchronous operation, indicating whether the update was successful.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entity"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no rows are updated (e.g., entity does not exist).</exception>
     public async Task<bool> UpdateAsync(T entity)
     {
         EnsureNotDisposed();
@@ -297,6 +381,16 @@ public class DapperSet<T> : IDisposable where T : class
         return rowsAffected > 0;
     }
 
+    /// <summary>
+    /// Deletes an entity from the table by its primary key.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="id">The primary key value of the entity to delete.</param>
+    /// <returns>A task that represents the asynchronous operation, indicating whether the deletion was successful.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no rows are deleted (e.g., entity does not exist).</exception>
     public async Task<bool> DeleteAsync<TKey>(TKey id)
     {
         EnsureNotDisposed();
@@ -370,12 +464,19 @@ public class DapperSet<T> : IDisposable where T : class
         return _propertyMap[columnName].Name;
     }
 
+    /// <summary>
+    /// Disposes of the resources used by the <see cref="DapperSet{T}"/> instance.
+    /// </summary>
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Disposes of the resources used by the <see cref="DapperSet{T}"/> instance.
+    /// </summary>
+    /// <param name="disposing">True if called from <see cref="Dispose()"/>; false if called from the finalizer.</param>
     protected virtual void Dispose(bool disposing)
     {
         if (!_disposed)

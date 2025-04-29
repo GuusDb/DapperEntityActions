@@ -10,6 +10,10 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 
+/// <summary>
+/// A generic class for performing CRUD operations and queries on a database table using Dapper.
+/// </summary>
+/// <typeparam name="T">The entity type representing the database table.</typeparam>
 
 public class DapperQuery<T> where T : class
 {
@@ -28,6 +32,17 @@ public class DapperQuery<T> where T : class
     private int? _pageIndex;
     private int? _pageSize;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperSet{T}"/> class.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="transaction">An optional database transaction to associate with operations.</param>
+    /// <param name="parent">The main entity.</param>
+    /// <param name="fullTableName">The table name shown in the database.</param>
+    /// <param name="propertyMap">The properties of the table linked to the entity ex Variable1 - variable_1 (in database).</param>
+    /// <param name="navigationProperties">The foreign keys in the database.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
     public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction transaction,
         string fullTableName, Dictionary<string, PropertyInfo> propertyMap,
         Dictionary<string, NavigationPropertyInfo> navigationProperties)
@@ -40,6 +55,11 @@ public class DapperQuery<T> where T : class
         _navigationProperties = navigationProperties;
     }
 
+    /// <summary>
+    /// Filters the query results based on a predicate.
+    /// </summary>
+    /// <param name="predicate">An expression specifying the filter condition.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperQuery<T> Where(Expression<Func<T, bool>> predicate)
     {
         // Extract navigation properties from the predicate
@@ -70,6 +90,13 @@ public class DapperQuery<T> where T : class
         return this;
     }
 
+    /// <summary>
+    /// Orders the query results by a specified property.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the property to order by.</typeparam>
+    /// <param name="orderByExpression">An expression specifying the property to order by.</param>
+    /// <param name="descending">If true, orders the results in descending order; otherwise, ascending.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> orderByExpression, bool descending = false)
     {
         var memberExpression = orderByExpression.Body as MemberExpression
@@ -102,6 +129,12 @@ public class DapperQuery<T> where T : class
         return this;
     }
 
+    /// <summary>
+    /// Includes a related entity in the query results via a navigation property.
+    /// </summary>
+    /// <typeparam name="TProperty">The type of the navigation property.</typeparam>
+    /// <param name="navigationProperty">An expression specifying the navigation property to include.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperQuery<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty)
     {
         var memberExpression = navigationProperty.Body as MemberExpression;
@@ -123,6 +156,12 @@ public class DapperQuery<T> where T : class
         return this;
     }
 
+    /// <summary>
+    /// Paginates the query results.
+    /// </summary>
+    /// <param name="pageIndex">The zero-based index of the page to retrieve.</param>
+    /// <param name="pageSize">The number of records per page.</param>
+    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
     public DapperQuery<T> Paginate(int pageIndex, int pageSize)
     {
         if (pageIndex < 0)
@@ -139,6 +178,11 @@ public class DapperQuery<T> where T : class
         return this;
     }
 
+    /// <summary>
+    /// Executes the query and returns the results.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     public async Task<IEnumerable<T>> ExecuteAsync()
     {
         var sqlBuilder = new StringBuilder();

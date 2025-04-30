@@ -89,4 +89,102 @@ public class OneToManyTests : TestSetup
             Assert.Empty(p.Children);
         });
     }
+
+    [Fact]
+    public async Task Where_Children_NameEqualsChild1_ShouldReturnMatchingParents()
+    {
+        // Act
+        var results = await DbContext.Parents
+            .Where(x => x.Children.Any(c => c.Name == "Child1"))
+            .ExecuteAsync();
+
+        // Assert
+        var parents = results.ToList();
+        Assert.Single(parents);
+        Assert.Equal(1, parents[0].ParentId);
+        Assert.Equal("Parent1", parents[0].Name);
+        Assert.Empty(parents[0].Children); // Children not included
+    }
+
+    [Fact]
+    public async Task Where_Children_NameNotEqualsChild1_ShouldReturnMatchingParents()
+    {
+        // Act
+        var results = await DbContext.Parents
+            .Where(x => x.Children.Any(c => c.Name != "Child1"))
+            .ExecuteAsync();
+
+        // Assert
+        var parents = results.ToList();
+        Assert.Equal(3, parents.Count); // All parents have at least one child not named "Child1"
+        Assert.Contains(parents, p => p.ParentId == 1); // Has "Child2"
+        Assert.Contains(parents, p => p.ParentId == 2); // Has "Child3", "Child4"
+        Assert.Contains(parents, p => p.ParentId == 3); // Has "Child5"
+        Assert.All(parents, p => Assert.Empty(p.Children)); // Children not included
+    }
+
+    [Fact]
+    public async Task Where_Children_IsActive_ShouldReturnMatchingParents()
+    {
+        // Act
+        var results = await DbContext.Parents
+            .Where(x => x.Children.Any(c => c.IsActive))
+            .ExecuteAsync();
+
+        // Assert
+        var parents = results.ToList();
+        Assert.Equal(2, parents.Count); // Parent1 (Child1 active), Parent2 (Child3, Child4 active)
+        Assert.Contains(parents, p => p.ParentId == 1);
+        Assert.Contains(parents, p => p.ParentId == 2);
+        Assert.All(parents, p => Assert.Empty(p.Children)); // Children not included
+    }
+
+    [Fact]
+    public async Task Where_Children_NameEqualsChild1_WithInclude_ShouldReturnParentsWithChildren()
+    {
+        // Act
+        var results = await DbContext.Parents
+            .Include(x => x.Children)
+            .Where(x => x.Children.Any(c => c.Name == "Child1"))
+            .ExecuteAsync();
+
+        // Assert
+        var parents = results.ToList();
+        Assert.Single(parents);
+        var parent = parents[0];
+        Assert.Equal(1, parent.ParentId);
+        Assert.Equal("Parent1", parent.Name);
+        Assert.NotNull(parent.Children);
+        Assert.Equal(2, parent.Children.Count);
+        Assert.Contains(parent.Children, c => c.Name == "Child1" && c.IsActive);
+        Assert.Contains(parent.Children, c => c.Name == "Child2" && !c.IsActive);
+    }
+
+    [Fact]
+    public async Task Where_Children_CombinedWithParentCondition_ShouldReturnMatchingParents()
+    {
+        // Act
+        var results = await DbContext.Parents
+            .Where(x => x.Children.Any(c => c.IsActive) && x.Name == "Parent2")
+            .ExecuteAsync();
+
+        // Assert
+        var parents = results.ToList();
+        Assert.Single(parents);
+        Assert.Equal(2, parents[0].ParentId);
+        Assert.Equal("Parent2", parents[0].Name);
+        Assert.Empty(parents[0].Children); // Children not included
+    }
+
+    [Fact]
+    public async Task Where_Children_NoMatches_ShouldReturnEmpty()
+    {
+        // Act
+        var results = await DbContext.Parents
+            .Where(x => x.Children.Any(c => c.Name == "NonExistent"))
+            .ExecuteAsync();
+
+        // Assert
+        Assert.Empty(results);
+    }
 }

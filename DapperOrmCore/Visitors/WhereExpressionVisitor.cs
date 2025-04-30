@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using DapperOrmCore.Models;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -129,6 +130,64 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
             string paramName = $"p{_paramCounter++}";
             _sqlBuilder.Append($"@{paramName}");
             _parameters.Add(paramName, $"%{value}%");
+            return node;
+        }
+        if (node.Method.Name == "Any" && node.Arguments[0] is MemberExpression memberExpr &&
+            _navigationProperties.ContainsKey(memberExpr.Member.Name) &&
+            _navigationProperties[memberExpr.Member.Name].IsCollection)
+        {
+            // Handle x => x.Children.Any(c => c.Name == "Child1")
+            string navPropName = memberExpr.Member.Name;
+            var navProp = _navigationProperties[navPropName];
+            string relatedTable = navProp.RelatedTableName;
+            string fkColumn = navProp.ForeignKeyColumn;
+            string alias = "c";
+            string mainTablePkColumn = _propertyMap.First(p => p.Value.GetCustomAttribute<KeyAttribute>() != null).Key;
+
+            _sqlBuilder.Append(_isNegated ? "NOT EXISTS (" : "EXISTS (");
+            _sqlBuilder.Append($"SELECT 1 FROM {relatedTable} {alias} ");
+            _sqlBuilder.Append($"WHERE {alias}.{fkColumn} = t.{mainTablePkColumn}");
+
+            if (node.Arguments.Count > 1 && node.Arguments[1] is LambdaExpression lambda)
+            {
+                // Create a WhereExpressionVisitor for the related type
+                var relatedType = navProp.RelatedType;
+                var relatedPropertyMap = relatedType.GetProperties()
+                    .Where(p => p.GetCustomAttribute<NotMappedAttribute>() == null)
+                    .ToDictionary(
+                        p => p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name,
+                        p => p,
+                        StringComparer.OrdinalIgnoreCase);
+
+                // Instantiate WhereExpressionVisitor<TRelated>
+                var visitorType = typeof(WhereExpressionVisitor<>).MakeGenericType(relatedType);
+                var subVisitor = Activator.CreateInstance(
+                    visitorType,
+                    relatedPropertyMap,
+                    new Dictionary<string, NavigationPropertyInfo>(),
+                    new List<string>());
+
+                // Create the lambda with the correct parameter type
+                var delegateType = typeof(Func<,>).MakeGenericType(relatedType, typeof(bool));
+                var lambdaExpr = Expression.Lambda(delegateType, lambda.Body, lambda.Parameters);
+
+                // Translate the inner predicate
+                var translateMethod = visitorType.GetMethod("Translate");
+                var (subSql, subParams) = ((string, DynamicParameters))translateMethod.Invoke(subVisitor, new[] { lambdaExpr });
+
+                if (!string.IsNullOrEmpty(subSql))
+                {
+                    _sqlBuilder.Append($" AND {subSql.Replace("t.", $"{alias}.")}");
+                    foreach (var paramName in subParams.ParameterNames)
+                    {
+                        string newParamName = $"p{_paramCounter++}";
+                        _parameters.Add(newParamName, subParams.Get<object>(paramName));
+                        _sqlBuilder.Replace($"@{paramName}", $"@{newParamName}");
+                    }
+                }
+            }
+
+            _sqlBuilder.Append(")");
             return node;
         }
         throw new NotSupportedException($"Method '{node.Method.Name}' is not supported");

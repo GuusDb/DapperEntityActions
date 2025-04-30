@@ -12,6 +12,8 @@ public class ApplicationDbContext : IDisposable
     public DapperSet<Plant> Plants { get; }
     public DapperSet<TestLalala> Tests { get; }
     public DapperSet<CoolMeasurement> Measurements { get; }
+    public DapperSet<Parent> Parents { get; }
+    public DapperSet<Child> Children { get; }
 
     public ApplicationDbContext(IDbConnection connection)
     {
@@ -21,6 +23,8 @@ public class ApplicationDbContext : IDisposable
         Plants = new DapperSet<Plant>(_connection, _transaction);
         Tests = new DapperSet<TestLalala>(_connection, _transaction);
         Measurements = new DapperSet<CoolMeasurement>(_connection, _transaction);
+        Parents = new DapperSet<Parent>(_connection, _transaction);
+        Children = new DapperSet<Child>(_connection, _transaction);
     }
 
     public void Commit() => _transaction?.Commit();

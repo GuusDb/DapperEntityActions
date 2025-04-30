@@ -7,7 +7,7 @@ using System.Text;
 
 namespace DapperOrmCore.Visitors;
 
-internal class WhereExpressionVisitor<T> : ExpressionVisitor
+public class WhereExpressionVisitor<T> : ExpressionVisitor
 {
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
     private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;

@@ -40,6 +40,47 @@ public class Plant
 }
 ```
 
+1.1 Define Entities with 1..n relationship
+```C#
+// Parent table
+[Table("parent")]
+public class Parent
+{
+    [Key]
+    [Column("parent_id")]
+    public int ParentId { get; set; }
+
+    [Column("name")]
+    public required string Name { get; set; }
+
+    [NotMapped]
+    public List<Child> Children { get; set; } = new List<Child>(); // initialise is important and needed 
+}
+
+// Child table
+using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations;
+
+[Table("child")]
+public class Child
+{
+    [Key]
+    [Column("child_id")]
+    public int ChildId { get; set; }
+
+    // foreign key to parent necessary
+    [Column("parent_id")]
+    [ForeignKey("Parent")]
+    public int ParentId { get; set; }
+
+    [Column("name")]
+    public required string Name { get; set; }
+
+    [Column("is_active")]
+    public bool IsActive { get; set; }
+}
+```
+
 2. Create DbContext
 
 ```C#

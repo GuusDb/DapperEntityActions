@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 
 namespace DapperOrmCore.Models;
+
 /// <summary>  
 /// Represents information about a navigation property in a database context.  
 /// </summary>  
@@ -25,4 +26,6 @@ public class NavigationPropertyInfo
     /// Gets or sets the property information for the navigation property.  
     /// </summary>  
     public PropertyInfo Property { get; set; }
+
+    public bool IsCollection { get; set; }
 }

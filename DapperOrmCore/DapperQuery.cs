@@ -11,10 +11,9 @@ using System.Reflection;
 using System.Text;
 
 /// <summary>
-/// A generic class for performing CRUD operations and queries on a database table using Dapper.
+/// A generic class for performing queries on a database table using Dapper.
 /// </summary>
 /// <typeparam name="T">The entity type representing the database table.</typeparam>
-
 public class DapperQuery<T> where T : class
 {
     private readonly DapperSet<T> _parent;
@@ -190,12 +189,16 @@ public class DapperQuery<T> where T : class
         var joins = new List<string>();
         var splitOn = new List<string> { "id" };
         var types = new List<Type> { typeof(T) };
-        var mappings = new List<Func<object[], T>>();
 
-        // Combine included and referenced navigation properties
+        var pkProperty = _propertyMap.FirstOrDefault(p => p.Value.GetCustomAttribute<KeyAttribute>() != null);
+        if (pkProperty.Value == null)
+        {
+            throw new InvalidOperationException("Primary key not found for main entity.");
+        }
+        string pkColumn = pkProperty.Key;
+
         var allNavProps = _includedProperties.Union(_referencedNavProps).Distinct().ToList();
 
-        // Handle navigation properties
         for (int i = 0; i < allNavProps.Count; i++)
         {
             var navProp = _navigationProperties[allNavProps[i]];
@@ -208,30 +211,41 @@ public class DapperQuery<T> where T : class
                 ?.GetCustomAttribute<ColumnAttribute>()?.Name
                 ?? throw new InvalidOperationException($"Primary key not found for {navProp.RelatedType.Name}");
 
-            joins.Add($"LEFT JOIN {relatedTable} {alias} ON t.{fkColumn} = {alias}.{relatedPkColumn}");
+            string joinCondition = navProp.IsCollection
+                ? $"t.{pkColumn} = {alias}.{fkColumn}"
+                : $"t.{fkColumn} = {alias}.{relatedPkColumn}";
+
+            joins.Add($"LEFT JOIN {relatedTable} {alias} ON {joinCondition}");
 
             if (_includedProperties.Contains(allNavProps[i]))
             {
                 selectColumns.Add($"{alias}.*");
                 splitOn.Add(relatedPkColumn);
                 types.Add(navProp.RelatedType);
-
-                int index = i + 1;
-                mappings.Add(objects =>
-                {
-                    var entity = (T)objects[0];
-                    if (objects[index] != null)
-                    {
-                        navProp.Property.SetValue(entity, objects[index]);
-                    }
-                    return entity;
-                });
             }
         }
 
-        // Build the final SQL query
+        // Apply pagination to the main table if needed
+        string fromClause = _fullTableName;
+        if (_pageIndex.HasValue && _pageSize.HasValue)
+        {
+            var subQuery = new StringBuilder();
+            subQuery.Append($"SELECT * FROM {_fullTableName}");
+            if (_whereClauses.Any())
+            {
+                subQuery.Append($" WHERE {string.Join(" AND ", _whereClauses)}");
+            }
+            if (_orderByClause.Length > 0)
+            {
+                subQuery.Append($" {_orderByClause}");
+            }
+            subQuery.Append($" LIMIT {_pageSize.Value} OFFSET {_pageIndex.Value * _pageSize.Value}");
+            fromClause = $"({subQuery})";
+            _whereClauses.Clear(); // Clear where clauses as they are applied in the subquery
+        }
+
         sqlBuilder.Append($"SELECT {string.Join(", ", selectColumns)}");
-        sqlBuilder.Append($" FROM {_fullTableName} t");
+        sqlBuilder.Append($" FROM {fromClause} t");
         if (joins.Any())
         {
             sqlBuilder.Append(" " + string.Join(" ", joins));
@@ -247,12 +261,6 @@ public class DapperQuery<T> where T : class
             sqlBuilder.Append($" {_orderByClause}");
         }
 
-        if (_pageIndex.HasValue && _pageSize.HasValue)
-        {
-            int offset = _pageIndex.Value * _pageSize.Value;
-            sqlBuilder.Append($" LIMIT {_pageSize.Value} OFFSET {offset}");
-        }
-
         string sql = sqlBuilder.ToString();
         Log.Information($"Executing SQL: {sql}");
         Log.Information($"Parameters: {string.Join(", ", _parameters.ParameterNames.Select(n => $"{n}={_parameters.Get<object>(n)}"))}");
@@ -261,56 +269,53 @@ public class DapperQuery<T> where T : class
         {
             return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
         }
-        else if (_includedProperties.Count == 1)
-        {
-            var results = await _connection.QueryAsync(
-                sql,
-                types.ToArray(),
-                objects =>
+
+        var lookup = new Dictionary<object, T>();
+        await _connection.QueryAsync(
+            sql,
+            types.ToArray(),
+            objects =>
+            {
+                var entity = (T)objects[0];
+                var pkValue = pkProperty.Value.GetValue(entity);
+                if (!lookup.TryGetValue(pkValue, out T existing))
                 {
-                    var entity = (T)objects[0];
-                    if (objects[1] != null)
+                    lookup[pkValue] = entity;
+                    existing = entity;
+
+                    foreach (var navProp in _navigationProperties.Values.Where(np => np.IsCollection && _includedProperties.Contains(np.Property.Name)))
                     {
-                        _navigationProperties[_includedProperties[0]].Property.SetValue(entity, objects[1]);
+                        var collection = Activator.CreateInstance(typeof(List<>).MakeGenericType(navProp.RelatedType));
+                        navProp.Property.SetValue(existing, collection);
                     }
-                    return entity;
-                },
-                _parameters,
-                transaction: _transaction,
-                splitOn: string.Join(",", splitOn)
-            );
-            return results;
-        }
-        else
-        {
-            var lookup = new Dictionary<object, T>();
-            var results = await _connection.QueryAsync(
-                sql,
-                types.ToArray(),
-                objects =>
+                }
+
+                for (int i = 0; i < _includedProperties.Count; i++)
                 {
-                    var entity = (T)objects[0];
-                    var pkValue = _propertyMap.First(p => p.Value.GetCustomAttribute<KeyAttribute>() != null).Value.GetValue(entity);
-                    if (!lookup.TryGetValue(pkValue, out T existing))
+                    var navProp = _navigationProperties[_includedProperties[i]];
+                    var relatedObject = objects[i + 1];
+                    if (relatedObject == null)
+                        continue;
+
+                    if (navProp.IsCollection)
                     {
-                        lookup[pkValue] = entity;
-                        existing = entity;
+                        var collection = navProp.Property.GetValue(existing);
+                        var addMethod = collection.GetType().GetMethod("Add");
+                        addMethod.Invoke(collection, new[] { relatedObject });
                     }
-                    for (int i = 0; i < _includedProperties.Count; i++)
+                    else
                     {
-                        if (objects[i + 1] != null)
-                        {
-                            _navigationProperties[_includedProperties[i]].Property.SetValue(existing, objects[i + 1]);
-                        }
+                        navProp.Property.SetValue(existing, relatedObject);
                     }
-                    return existing;
-                },
-                _parameters,
-                transaction: _transaction,
-                splitOn: string.Join(",", splitOn)
-            );
-            return lookup.Values;
-        }
+                }
+
+                return existing;
+            },
+            _parameters,
+            transaction: _transaction,
+            splitOn: string.Join(",", splitOn)
+        );
+
+        return lookup.Values;
     }
 }
-

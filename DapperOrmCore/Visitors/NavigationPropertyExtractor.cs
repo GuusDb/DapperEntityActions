@@ -2,7 +2,7 @@
 
 
 namespace DapperOrmCore.Visitors;
-internal class NavigationPropertyExtractor : ExpressionVisitor
+public class NavigationPropertyExtractor : ExpressionVisitor
 {
     private readonly List<string> _navigationProperties;
     public HashSet<string> NavigationProperties { get; } = new HashSet<string>();

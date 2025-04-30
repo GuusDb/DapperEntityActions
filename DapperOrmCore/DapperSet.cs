@@ -78,20 +78,65 @@ public class DapperSet<T> : IDisposable where T : class
         foreach (var prop in typeof(T).GetProperties().Where(p => p.GetCustomAttribute<NotMappedAttribute>() != null))
         {
             string fkColumn = null;
+            Type relatedType = prop.PropertyType;
+            bool isCollection = false;
 
-            // Check for [ForeignKey] attribute
+            // Check if the property is a collection (e.g., List<Child>)
+            if (prop.PropertyType.IsGenericType &&
+                prop.PropertyType.GetGenericTypeDefinition() == typeof(List<>) &&
+                prop.PropertyType != typeof(string))
+            {
+                isCollection = true;
+                relatedType = prop.PropertyType.GetGenericArguments()[0];
+            }
+
+            // Check for [ForeignKey] attribute on the navigation property
             var fkAttribute = prop.GetCustomAttribute<ForeignKeyAttribute>();
             if (fkAttribute != null)
             {
                 fkColumn = fkAttribute.Name;
             }
+            else if (isCollection)
+            {
+                // For collections, check the related type (e.g., Child) for a [ForeignKey] referencing this entity
+                var relatedProps = relatedType.GetProperties();
+                var fkProp = relatedProps.FirstOrDefault(p =>
+                {
+                    var fkAttr = p.GetCustomAttribute<ForeignKeyAttribute>();
+                    return fkAttr != null && fkAttr.Name == typeof(T).Name;
+                });
+
+                if (fkProp != null)
+                {
+                    fkColumn = fkProp.GetCustomAttribute<ColumnAttribute>()?.Name ?? fkProp.Name;
+                }
+                else
+                {
+                    // Fallback to convention: look for <Entity>Id or <Entity>_cd in the related type
+                    var possibleFkNames = new[]
+                    {
+                        $"{typeof(T).Name}Id",
+                        $"{typeof(T).Name}_cd"
+                    };
+
+                    fkProp = relatedProps.FirstOrDefault(p => possibleFkNames.Any(fk => string.Equals(
+                        p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name,
+                        fk,
+                        StringComparison.OrdinalIgnoreCase)));
+
+                    if (fkProp != null)
+                    {
+                        fkColumn = fkProp.GetCustomAttribute<ColumnAttribute>()?.Name ?? fkProp.Name;
+                    }
+                }
+            }
             else
             {
-                // Fallback to convention: try <RelatedEntityName>Id or <RelatedEntityName>_cd
+                // Fallback to convention for non-collection navigation properties
                 var possibleFkNames = new[]
                 {
-                    $"{prop.PropertyType.Name}Id",
-                    $"{prop.PropertyType.Name}_cd",
+                    $"{relatedType.Name}Id",
+                    $"{relatedType.Name}_cd",
                     $"{prop.Name}Id",
                     $"{prop.Name}_cd"
                 };
@@ -108,14 +153,15 @@ public class DapperSet<T> : IDisposable where T : class
                 }
             }
 
-            if (fkColumn != null && _propertyMap.ContainsKey(fkColumn))
+            if (fkColumn != null)
             {
                 _navigationProperties[prop.Name] = new NavigationPropertyInfo
                 {
                     Property = prop,
-                    RelatedType = prop.PropertyType,
+                    RelatedType = relatedType,
                     ForeignKeyColumn = fkColumn,
-                    RelatedTableName = prop.PropertyType.GetCustomAttribute<TableAttribute>()?.Name ?? prop.PropertyType.Name
+                    RelatedTableName = relatedType.GetCustomAttribute<TableAttribute>()?.Name ?? relatedType.Name,
+                    IsCollection = isCollection
                 };
             }
         }
@@ -133,8 +179,6 @@ public class DapperSet<T> : IDisposable where T : class
             )
         );
     }
-
-    
 
     private void ParseTableName(string rawName, out string schema, out string table)
     {
@@ -196,7 +240,6 @@ public class DapperSet<T> : IDisposable where T : class
         _query.OrderBy(orderByExpression, descending);
         return this;
     }
-
 
     /// <summary>
     /// Paginates the query results.

@@ -342,11 +342,15 @@ public class DapperQuery<T> where T : class
             subQuery.Append($"SELECT * FROM {_fullTableName}");
             if (_whereClauses.Any())
             {
-                subQuery.Append($" WHERE {string.Join(" AND ", _whereClauses)}");
+                // For the subquery, we need to remove the 't.' prefix from the where clauses
+                var subQueryWhereClauses = _whereClauses.Select(clause => clause.Replace("t.", "")).ToList();
+                subQuery.Append($" WHERE {string.Join(" AND ", subQueryWhereClauses)}");
             }
             if (_orderByClause.Length > 0)
             {
-                subQuery.Append($" {_orderByClause}");
+                // For the subquery, we need to remove the 't.' prefix from the order by clause
+                var subQueryOrderBy = _orderByClause.ToString().Replace("t.", "");
+                subQuery.Append($" {subQueryOrderBy}");
             }
             subQuery.Append($" LIMIT {_pageSize.Value} OFFSET {_pageIndex.Value * _pageSize.Value}");
             fromClause = $"({subQuery})";

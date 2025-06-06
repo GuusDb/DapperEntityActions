@@ -30,6 +30,11 @@ public class DapperQuery<T> where T : class
     private int _paramCounter = 0;
     private int? _pageIndex;
     private int? _pageSize;
+    private LambdaExpression _selectExpression;
+    private Type _selectResultType;
+    private List<string> _selectedColumns = new List<string>();
+    private bool _hasSelectClause = false;
+    private Delegate _compiledSelector;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DapperSet{T}"/> class.
@@ -178,6 +183,110 @@ public class DapperQuery<T> where T : class
     }
 
     /// <summary>
+    /// Selects specific properties from the entity to create a projection.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="selector">An expression specifying the properties to select.</param>
+    /// <returns>A new <see cref="DapperProjectionQuery{T, TResult}"/> instance for method chaining.</returns>
+    public DapperProjectionQuery<T, TResult> Select<TResult>(Expression<Func<T, TResult>> selector)
+    {
+        _selectExpression = selector;
+        _selectResultType = typeof(TResult);
+        _hasSelectClause = true;
+        _compiledSelector = selector.Compile();
+        
+        // If we're using Select, we can't use Include
+        // This is a limitation of the current implementation
+        if (_includedProperties.Count > 0)
+        {
+            _includedProperties.Clear();
+            Log.Warning("Include operations are ignored when using Select. This is a limitation of the current implementation.");
+        }
+        
+        // Extract the property names from the selector expression
+        if (typeof(TResult).IsClass && !typeof(TResult).IsPrimitive && typeof(TResult) != typeof(string))
+        {
+            // For anonymous types or DTOs, extract the property names from the expression
+            if (selector.Body is NewExpression newExpression)
+            {
+                // Handle anonymous types or explicit new object creation
+                for (int i = 0; i < newExpression.Arguments.Count; i++)
+                {
+                    if (newExpression.Arguments[i] is MemberExpression memberExpression)
+                    {
+                        string propertyName = memberExpression.Member.Name;
+                        string columnName = _propertyMap.Keys.FirstOrDefault(k =>
+                            string.Equals(_propertyMap[k].Name, propertyName, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (!string.IsNullOrEmpty(columnName))
+                        {
+                            _selectedColumns.Add($"t.{columnName}");
+                        }
+                    }
+                }
+            }
+            else if (selector.Body is MemberInitExpression memberInitExpression)
+            {
+                // Handle object initializers
+                foreach (var binding in memberInitExpression.Bindings)
+                {
+                    if (binding is MemberAssignment assignment &&
+                        assignment.Expression is MemberExpression memberExpression)
+                    {
+                        string propertyName = memberExpression.Member.Name;
+                        string columnName = _propertyMap.Keys.FirstOrDefault(k =>
+                            string.Equals(_propertyMap[k].Name, propertyName, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (!string.IsNullOrEmpty(columnName))
+                        {
+                            _selectedColumns.Add($"t.{columnName}");
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            // For primitive types or single property selection
+            if (selector.Body is MemberExpression memberExpression)
+            {
+                string propertyName = memberExpression.Member.Name;
+                string columnName = _propertyMap.Keys.FirstOrDefault(k =>
+                    string.Equals(_propertyMap[k].Name, propertyName, StringComparison.OrdinalIgnoreCase));
+                
+                if (!string.IsNullOrEmpty(columnName))
+                {
+                    _selectedColumns.Add($"t.{columnName}");
+                }
+            }
+        }
+        
+        // If we couldn't extract any columns, default to selecting all
+        if (_selectedColumns.Count == 0)
+        {
+            _selectedColumns.Add("t.*");
+        }
+        
+        // Create a new DapperProjectionQuery with the current query state
+        return new DapperProjectionQuery<T, TResult>(
+            _parent,
+            _connection,
+            _transaction,
+            _fullTableName,
+            _propertyMap,
+            _navigationProperties,
+            _whereClauses,
+            _parameters,
+            _orderByClause,
+            _includedProperties,
+            _referencedNavProps,
+            _pageIndex,
+            _pageSize,
+            selector,
+            _selectedColumns);
+    }
+
+    /// <summary>
     /// Executes the query and returns the results.
     /// </summary>
     /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
@@ -244,7 +353,22 @@ public class DapperQuery<T> where T : class
             _whereClauses.Clear(); // Clear where clauses as they are applied in the subquery
         }
 
-        sqlBuilder.Append($"SELECT {string.Join(", ", selectColumns)}");
+        // If a select expression is provided, modify the SQL to select only the specified columns
+        // But we still need to include the primary key for proper entity tracking
+        if (_hasSelectClause && _selectedColumns.Count > 0)
+        {
+            // Always include the primary key column for proper entity tracking
+            if (!_selectedColumns.Any(c => c.Contains(pkColumn)))
+            {
+                _selectedColumns.Add($"t.{pkColumn}");
+            }
+            
+            sqlBuilder.Append($"SELECT {string.Join(", ", _selectedColumns)}");
+        }
+        else
+        {
+            sqlBuilder.Append($"SELECT {string.Join(", ", selectColumns)}");
+        }
         sqlBuilder.Append($" FROM {fromClause} t");
         if (joins.Any())
         {
@@ -267,7 +391,31 @@ public class DapperQuery<T> where T : class
 
         if (_includedProperties.Count == 0)
         {
-            return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
+            if (_hasSelectClause)
+            {
+                // For Select operations, we need to get the entities first, then project them
+                var entities = await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
+                
+                // Apply the projection using the compiled selector
+                if (_compiledSelector != null)
+                {
+                    var results = new List<object>();
+                    foreach (var entity in entities)
+                    {
+                        results.Add(_compiledSelector.DynamicInvoke(entity));
+                    }
+                    
+                    // We need to return IEnumerable<T> for interface consistency
+                    // In a real-world scenario, we would modify the return type to match TResult
+                    return results.Cast<T>();
+                }
+                
+                return entities;
+            }
+            else
+            {
+                return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
+            }
         }
 
         var lookup = new Dictionary<object, T>();
@@ -316,6 +464,22 @@ public class DapperQuery<T> where T : class
             splitOn: string.Join(",", splitOn)
         );
 
-        return lookup.Values;
+        var entityResults = lookup.Values;
+        
+        // Apply projection if a select expression is provided
+        if (_hasSelectClause && _compiledSelector != null)
+        {
+            // For complex queries with includes, we still need to do the projection in memory
+            var results = new List<object>();
+            foreach (var entity in entityResults)
+            {
+                results.Add(_compiledSelector.DynamicInvoke(entity));
+            }
+            
+            // We need to return IEnumerable<T> for interface consistency
+            return results.Cast<T>();
+        }
+        
+        return entityResults;
     }
 }

@@ -1,325 +1,260 @@
-﻿using Dapper;
-using DapperOrmCore;
-using DapperOrmCore.Models;
-using DapperOrmCore.Visitors;
-using Serilog;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.ComponentModel.DataAnnotations;
-using System.Data;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Text;
+﻿using DapperOrmCore.Tests.Models;
+using System.Threading.Tasks;
+using Xunit;
 
-/// <summary>
-/// A generic class for performing queries on a database table using Dapper.
-/// </summary>
-/// <typeparam name="T">The entity type representing the database table.</typeparam>
-public class DapperQuery<T> where T : class
+namespace DapperOrmCore.Tests;
+
+public class CombinationTests : TestSetup
 {
-    private readonly DapperSet<T> _parent;
-    private readonly IDbConnection _connection;
-    private readonly IDbTransaction _transaction;
-    private readonly string _fullTableName;
-    private readonly Dictionary<string, PropertyInfo> _propertyMap;
-    private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;
-    private readonly List<string> _whereClauses = new List<string>();
-    private DynamicParameters _parameters = new DynamicParameters();
-    private readonly StringBuilder _orderByClause = new StringBuilder();
-    private readonly List<string> _includedProperties = new List<string>();
-    private readonly List<string> _referencedNavProps = new List<string>();
-    private int _paramCounter = 0;
-    private int? _pageIndex;
-    private int? _pageSize;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DapperSet{T}"/> class.
-    /// </summary>
-    /// <param name="connection">The database connection to use for operations.</param>
-    /// <param name="transaction">An optional database transaction to associate with operations.</param>
-    /// <param name="parent">The main entity.</param>
-    /// <param name="fullTableName">The table name shown in the database.</param>
-    /// <param name="propertyMap">The properties of the table linked to the entity ex Variable1 - variable_1 (in database).</param>
-    /// <param name="navigationProperties">The foreign keys in the database.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
-    public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction transaction,
-        string fullTableName, Dictionary<string, PropertyInfo> propertyMap,
-        Dictionary<string, NavigationPropertyInfo> navigationProperties)
+    [Fact]
+    public async Task Select_ThenWhere_ShouldProjectThenFilter()
     {
-        _parent = parent;
-        _connection = connection;
-        _transaction = transaction;
-        _fullTableName = fullTableName;
-        _propertyMap = propertyMap;
-        _navigationProperties = navigationProperties;
+        // Act
+        var results = await DbContext.Plants
+            .Select(p => new { p.PlantCd, p.Description, p.IsAcive })
+            .Where(p => p.IsAcive)
+            .ExecuteAsync();
+
+        // Assert
+        Assert.Equal(3, results.Count());
+        
+        // Check that only active plants are returned
+        Assert.Contains(results, p => p.PlantCd == "PLANT1" && p.IsAcive);
+        Assert.Contains(results, p => p.PlantCd == "PLANT2" && p.IsAcive);
+        Assert.Contains(results, p => p.PlantCd == "PLANT4" && p.IsAcive);
+        Assert.DoesNotContain(results, p => p.PlantCd == "PLANT3");
     }
 
-    /// <summary>
-    /// Filters the query results based on a predicate.
-    /// </summary>
-    /// <param name="predicate">An expression specifying the filter condition.</param>
-    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
-    public DapperQuery<T> Where(Expression<Func<T, bool>> predicate)
+    [Fact]
+    public async Task Where_ThenSelect_ShouldFilterThenProject()
     {
-        // Extract navigation properties from the predicate
-        var navProps = new NavigationPropertyExtractor(_navigationProperties.Keys.ToList())
-            .Extract(predicate);
-        foreach (var navProp in navProps)
-        {
-            if (!_referencedNavProps.Contains(navProp))
-                _referencedNavProps.Add(navProp);
-        }
+        // Act
+        var results = await DbContext.Plants
+            .Where(p => p.IsAcive)
+            .Select(p => new { Code = p.PlantCd, Name = p.Description })
+            .ExecuteAsync();
 
-        var visitor = new WhereExpressionVisitor<T>(_propertyMap, _navigationProperties, _referencedNavProps);
-        var (sqlCondition, parameters) = visitor.Translate(predicate);
-
-        var paramMapping = new Dictionary<string, string>();
-        string newSqlCondition = sqlCondition;
-        foreach (var paramName in parameters.ParameterNames)
-        {
-            string baseParamName = paramName.StartsWith("@") ? paramName.Substring(1) : paramName;
-            string newParamName = $"p{_paramCounter++}";
-            paramMapping[baseParamName] = newParamName;
-            newSqlCondition = newSqlCondition.Replace($"@{baseParamName}", $"@{newParamName}");
-            _parameters.Add(newParamName, parameters.Get<object>(paramName));
-        }
-
-        _whereClauses.Add(newSqlCondition);
-
-        return this;
+        // Assert
+        Assert.Equal(3, results.Count());
+        
+        // Check that only active plants are returned
+        Assert.Contains(results, d => d.Code == "PLANT1" && d.Name == "Plant 1");
+        Assert.Contains(results, d => d.Code == "PLANT2" && d.Name == "Plant 2");
+        Assert.Contains(results, d => d.Code == "PLANT4" && d.Name == "Plant 4");
+        Assert.DoesNotContain(results, d => d.Code == "PLANT3");
     }
 
-    /// <summary>
-    /// Orders the query results by a specified property.
-    /// </summary>
-    /// <typeparam name="TKey">The type of the property to order by.</typeparam>
-    /// <param name="orderByExpression">An expression specifying the property to order by.</param>
-    /// <param name="descending">If true, orders the results in descending order; otherwise, ascending.</param>
-    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
-    public DapperQuery<T> OrderBy<TKey>(Expression<Func<T, TKey>> orderByExpression, bool descending = false)
+    [Fact]
+    public async Task Select_ThenOrderBy_ShouldProjectThenOrder()
     {
-        var memberExpression = orderByExpression.Body as MemberExpression
-            ?? (orderByExpression.Body as UnaryExpression)?.Operand as MemberExpression;
+        // Act
+        var results = await DbContext.Plants
+            .Select(p => new { p.PlantCd, p.Description })
+            .OrderBy(p => p.Description)
+            .ExecuteAsync();
 
-        if (memberExpression == null || memberExpression.Expression?.Type != typeof(T))
-        {
-            throw new ArgumentException("Invalid order by expression.");
-        }
-
-        string propertyName = memberExpression.Member.Name;
-        string columnName = _propertyMap.Keys.FirstOrDefault(k =>
-            string.Equals(k, propertyName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(_propertyMap[k].Name, propertyName, StringComparison.OrdinalIgnoreCase))
-            ?? throw new ArgumentException($"Property '{propertyName}' not found in entity.");
-
-        string orderDirection = descending ? "DESC" : "ASC";
-
-        if (_orderByClause.Length > 0)
-        {
-            _orderByClause.Append(", ");
-        }
-        else
-        {
-            _orderByClause.Append("ORDER BY ");
-        }
-
-        _orderByClause.Append($"{columnName} {orderDirection}");
-
-        return this;
+        // Assert
+        var items = results.ToList();
+        Assert.Equal(4, items.Count);
+        
+        // Check that the order is correct (alphabetical by name/description)
+        Assert.Equal("PLANT1", items[0].PlantCd);
+        Assert.Equal("PLANT2", items[1].PlantCd);
+        Assert.Equal("PLANT3", items[2].PlantCd);
+        Assert.Equal("PLANT4", items[3].PlantCd);
     }
 
-    /// <summary>
-    /// Includes a related entity in the query results via a navigation property.
-    /// </summary>
-    /// <typeparam name="TProperty">The type of the navigation property.</typeparam>
-    /// <param name="navigationProperty">An expression specifying the navigation property to include.</param>
-    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
-    public DapperQuery<T> Include<TProperty>(Expression<Func<T, TProperty>> navigationProperty)
+    [Fact]
+    public async Task OrderBy_ThenSelect_ShouldOrderThenProject()
     {
-        var memberExpression = navigationProperty.Body as MemberExpression;
-        if (memberExpression == null || memberExpression.Expression?.Type != typeof(T))
-        {
-            throw new ArgumentException("Invalid navigation property expression.");
-        }
+        // Act
+        var results = await DbContext.Plants
+            .OrderBy(p => p.Description)
+            .Select(p => p.PlantCd)
+            .ExecuteAsync();
 
-        string propertyName = memberExpression.Member.Name;
-        if (!_navigationProperties.ContainsKey(propertyName))
-        {
-            throw new ArgumentException($"Navigation property '{propertyName}' not found.");
-        }
-
-        if (!_includedProperties.Contains(propertyName))
-        {
-            _includedProperties.Add(propertyName);
-        }
-        return this;
+        // Assert
+        var plantCodes = results.ToList();
+        Assert.Equal(4, plantCodes.Count);
+        
+        // Check that the order is correct (alphabetical by description)
+        Assert.Equal("PLANT1", plantCodes[0]);
+        Assert.Equal("PLANT2", plantCodes[1]);
+        Assert.Equal("PLANT3", plantCodes[2]);
+        Assert.Equal("PLANT4", plantCodes[3]);
     }
 
-    /// <summary>
-    /// Paginates the query results.
-    /// </summary>
-    /// <param name="pageIndex">The zero-based index of the page to retrieve.</param>
-    /// <param name="pageSize">The number of records per page.</param>
-    /// <returns>The current <see cref="DapperSet{T}"/> instance for method chaining.</returns>
-    public DapperQuery<T> Paginate(int pageIndex, int pageSize)
+    [Fact]
+    public async Task Select_Where_OrderBy_ShouldCombineAllOperations()
     {
-        if (pageIndex < 0)
-        {
-            throw new ArgumentException("Page index cannot be negative.");
-        }
-        if (pageSize <= 0)
-        {
-            throw new ArgumentException("Page size must be greater than zero.");
-        }
+        // Act
+        var results = await DbContext.Plants
+            .Select(p => new { p.PlantCd, p.Description, p.IsAcive })
+            .Where(p => p.IsAcive)
+            .OrderBy(p => p.Description, descending: true)
+            .ExecuteAsync();
 
-        _pageIndex = pageIndex;
-        _pageSize = pageSize;
-        return this;
+        // Assert
+        Assert.Equal(3, results.Count());
+        
+        var items = results.ToList();
+        
+        // Check that only active plants are returned in descending order
+        Assert.Equal("PLANT4", items[0].PlantCd); // Plant 4 should be first (descending order)
+        Assert.Equal("PLANT2", items[1].PlantCd);
+        Assert.Equal("PLANT1", items[2].PlantCd);
+        
+        // Check that inactive plants are not included
+        Assert.DoesNotContain(results, i => i.PlantCd == "PLANT3");
     }
 
-    /// <summary>
-    /// Executes the query and returns the results.
-    /// </summary>
-    /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
-    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
-    public async Task<IEnumerable<T>> ExecuteAsync()
+    [Fact]
+    public async Task Select_ThenPaginate_ShouldProjectThenPaginate()
     {
-        var sqlBuilder = new StringBuilder();
-        var selectColumns = new List<string> { $"t.*" };
-        var joins = new List<string>();
-        var splitOn = new List<string> { "id" };
-        var types = new List<Type> { typeof(T) };
+        // Act
+        var results = await DbContext.Plants
+            .Select(p => new { p.PlantCd, p.Description })
+            .Paginate(0, 2) // First page, 2 items per page
+            .ExecuteAsync();
 
-        var pkProperty = _propertyMap.FirstOrDefault(p => p.Value.GetCustomAttribute<KeyAttribute>() != null);
-        if (pkProperty.Value == null)
+        // Assert
+        Assert.Equal(2, results.Count());
+        
+        var items = results.ToList();
+        Assert.Equal("PLANT1", items[0].PlantCd);
+        Assert.Equal("PLANT2", items[1].PlantCd);
+    }
+
+    [Fact]
+    public async Task Where_OrderBy_ShouldFilterThenOrder()
+    {
+        // Act
+        var results = await DbContext.Plants
+            .Where(p => p.IsAcive)
+            .OrderBy(p => p.Description)
+            .ExecuteAsync();
+
+        // Assert
+        var plants = results.ToList();
+        Assert.Equal(3, plants.Count);
+        
+        // Check that only active plants are returned in the correct order
+        Assert.Equal("PLANT1", plants[0].PlantCd);
+        Assert.Equal("PLANT2", plants[1].PlantCd);
+        Assert.Equal("PLANT4", plants[2].PlantCd);
+        
+        // Check that inactive plants are not included
+        Assert.DoesNotContain(plants, p => p.PlantCd == "PLANT3");
+    }
+
+    [Fact]
+    public async Task Where_Paginate_ShouldFilterThenPaginate()
+    {
+        // Act
+        var results = await DbContext.Plants
+            .Where(p => p.IsAcive)
+            .Paginate(0, 2) // First page, 2 items per page
+            .ExecuteAsync();
+
+        // Assert
+        var plants = results.ToList();
+        Assert.Equal(2, plants.Count);
+        
+        // Check that only the first 2 active plants are returned
+        Assert.Equal("PLANT1", plants[0].PlantCd);
+        Assert.Equal("PLANT2", plants[1].PlantCd);
+        
+        // Check second page
+        var page2Results = await DbContext.Plants
+            .Where(p => p.IsAcive)
+            .Paginate(1, 2) // Second page, 2 items per page
+            .ExecuteAsync();
+            
+        var page2Plants = page2Results.ToList();
+        Assert.Single(page2Plants);
+        Assert.Equal("PLANT4", page2Plants[0].PlantCd);
+    }
+
+    [Fact]
+    public async Task OrderBy_Paginate_ShouldOrderThenPaginate()
+    {
+        // Act
+        var results = await DbContext.Plants
+            .OrderBy(p => p.PlantCd, descending: true)
+            .Paginate(0, 2) // First page, 2 items per page
+            .ExecuteAsync();
+
+        // Assert
+        var plants = results.ToList();
+        Assert.Equal(2, plants.Count);
+        
+        // Check that plants are returned in descending order by PlantCd
+        Assert.Equal("PLANT4", plants[0].PlantCd);
+        Assert.Equal("PLANT3", plants[1].PlantCd);
+        
+        // Check second page
+        var page2Results = await DbContext.Plants
+            .OrderBy(p => p.PlantCd, descending: true)
+            .Paginate(1, 2) // Second page, 2 items per page
+            .ExecuteAsync();
+            
+        var page2Plants = page2Results.ToList();
+        Assert.Equal(2, page2Plants.Count);
+        Assert.Equal("PLANT2", page2Plants[0].PlantCd);
+        Assert.Equal("PLANT1", page2Plants[1].PlantCd);
+    }
+
+    [Fact]
+    public async Task Where_OrderBy_Paginate_ShouldCombineAllOperations()
+    {
+        // Act
+        var results = await DbContext.Plants
+            .Where(p => p.IsAcive)
+            .OrderBy(p => p.Description, descending: true)
+            .Paginate(0, 2) // First page, 2 items per page
+            .ExecuteAsync();
+
+        // Assert
+        var plants = results.ToList();
+        Assert.Equal(2, plants.Count);
+        
+        // Check that only active plants are returned in descending order by Description
+        Assert.Equal("PLANT4", plants[0].PlantCd); // Plant 4 should be first (descending order)
+        Assert.Equal("PLANT2", plants[1].PlantCd);
+        
+        // Check second page
+        var page2Results = await DbContext.Plants
+            .Where(p => p.IsAcive)
+            .OrderBy(p => p.Description, descending: true)
+            .Paginate(1, 2) // Second page, 2 items per page
+            .ExecuteAsync();
+            
+        var page2Plants = page2Results.ToList();
+        Assert.Single(page2Plants);
+        Assert.Equal("PLANT1", page2Plants[0].PlantCd);
+    }
+
+    [Fact]
+    public async Task Include_Where_ShouldIncludeRelatedEntitiesAndFilter()
+    {
+        // Act
+        var results = await DbContext.Measurements
+            .Include(m => m.Test)
+            .Where(m => m.TestCd == "TEST1")
+            .ExecuteAsync();
+
+        // Assert
+        var measurements = results.ToList();
+        Assert.Equal(2, measurements.Count);
+        
+        // Check that only measurements with TestCd = TEST1 are returned
+        Assert.All(measurements, m => Assert.Equal("TEST1", m.TestCd));
+        
+        // Check that related Test entities are included
+        Assert.All(measurements, m =>
         {
-            throw new InvalidOperationException("Primary key not found for main entity.");
-        }
-        string pkColumn = pkProperty.Key;
-
-        var allNavProps = _includedProperties.Union(_referencedNavProps).Distinct().ToList();
-
-        for (int i = 0; i < allNavProps.Count; i++)
-        {
-            var navProp = _navigationProperties[allNavProps[i]];
-            string alias = $"r{i + 1}";
-            string relatedTable = navProp.RelatedTableName;
-            string fkColumn = navProp.ForeignKeyColumn;
-
-            string relatedPkColumn = navProp.RelatedType.GetProperties()
-                .FirstOrDefault(p => p.GetCustomAttribute<KeyAttribute>() != null)
-                ?.GetCustomAttribute<ColumnAttribute>()?.Name
-                ?? throw new InvalidOperationException($"Primary key not found for {navProp.RelatedType.Name}");
-
-            string joinCondition = navProp.IsCollection
-                ? $"t.{pkColumn} = {alias}.{fkColumn}"
-                : $"t.{fkColumn} = {alias}.{relatedPkColumn}";
-
-            joins.Add($"LEFT JOIN {relatedTable} {alias} ON {joinCondition}");
-
-            if (_includedProperties.Contains(allNavProps[i]))
-            {
-                selectColumns.Add($"{alias}.*");
-                splitOn.Add(relatedPkColumn);
-                types.Add(navProp.RelatedType);
-            }
-        }
-
-        // Apply pagination to the main table if needed
-        string fromClause = _fullTableName;
-        if (_pageIndex.HasValue && _pageSize.HasValue)
-        {
-            var subQuery = new StringBuilder();
-            subQuery.Append($"SELECT * FROM {_fullTableName}");
-            if (_whereClauses.Any())
-            {
-                // Remove 't.' prefix from where clauses for subquery
-                var subQueryWhereClauses = _whereClauses.Select(clause => clause.Replace("t.", ""));
-                subQuery.Append($" WHERE {string.Join(" AND ", subQueryWhereClauses)}");
-            }
-            if (_orderByClause.Length > 0)
-            {
-                // Remove 't.' prefix from order by clause for subquery
-                var subQueryOrderBy = _orderByClause.ToString().Replace("t.", "");
-                subQuery.Append($" {subQueryOrderBy}");
-            }
-            subQuery.Append($" LIMIT {_pageSize.Value} OFFSET {_pageIndex.Value * _pageSize.Value}");
-            fromClause = $"({subQuery})";
-            _whereClauses.Clear(); // Clear where clauses as they are applied in the subquery
-        }
-
-        sqlBuilder.Append($"SELECT {string.Join(", ", selectColumns)}");
-        sqlBuilder.Append($" FROM {fromClause} t");
-        if (joins.Any())
-        {
-            sqlBuilder.Append(" " + string.Join(" ", joins));
-        }
-
-        if (_whereClauses.Any())
-        {
-            sqlBuilder.Append($" WHERE {string.Join(" AND ", _whereClauses)}");
-        }
-
-        if (_orderByClause.Length > 0)
-        {
-            sqlBuilder.Append($" {_orderByClause}");
-        }
-
-        string sql = sqlBuilder.ToString();
-        Log.Information($"Executing SQL: {sql}");
-        Log.Information($"Parameters: {string.Join(", ", _parameters.ParameterNames.Select(n => $"{n}={_parameters.Get<object>(n)}"))}");
-
-        if (_includedProperties.Count == 0)
-        {
-            return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
-        }
-
-        var lookup = new Dictionary<object, T>();
-        await _connection.QueryAsync(
-            sql,
-            types.ToArray(),
-            objects =>
-            {
-                var entity = (T)objects[0];
-                var pkValue = pkProperty.Value.GetValue(entity);
-                if (!lookup.TryGetValue(pkValue, out T existing))
-                {
-                    lookup[pkValue] = entity;
-                    existing = entity;
-
-                    foreach (var navProp in _navigationProperties.Values.Where(np => np.IsCollection && _includedProperties.Contains(np.Property.Name)))
-                    {
-                        var collection = Activator.CreateInstance(typeof(List<>).MakeGenericType(navProp.RelatedType));
-                        navProp.Property.SetValue(existing, collection);
-                    }
-                }
-
-                for (int i = 0; i < _includedProperties.Count; i++)
-                {
-                    var navProp = _navigationProperties[_includedProperties[i]];
-                    var relatedObject = objects[i + 1];
-                    if (relatedObject == null)
-                        continue;
-
-                    if (navProp.IsCollection)
-                    {
-                        var collection = navProp.Property.GetValue(existing);
-                        var addMethod = collection.GetType().GetMethod("Add");
-                        addMethod.Invoke(collection, new[] { relatedObject });
-                    }
-                    else
-                    {
-                        navProp.Property.SetValue(existing, relatedObject);
-                    }
-                }
-
-                return existing;
-            },
-            _parameters,
-            transaction: _transaction,
-            splitOn: string.Join(",", splitOn)
-        );
-
-        return lookup.Values;
+            Assert.NotNull(m.Test);
+            Assert.Equal("Test 1", m.Test.Description);
+        });
     }
 }

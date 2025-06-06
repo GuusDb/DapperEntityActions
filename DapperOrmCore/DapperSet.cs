@@ -242,6 +242,17 @@ public class DapperSet<T> : IDisposable where T : class
     }
 
     /// <summary>
+    /// Selects specific properties from the entity to create a projection.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the result.</typeparam>
+    /// <param name="selector">An expression specifying the properties to select.</param>
+    /// <returns>A new <see cref="DapperProjectionQuery{T, TResult}"/> instance for method chaining.</returns>
+    public DapperProjectionQuery<T, TResult> Select<TResult>(Expression<Func<T, TResult>> selector)
+    {
+        return _query.Select(selector);
+    }
+
+    /// <summary>
     /// Paginates the query results.
     /// </summary>
     /// <param name="pageIndex">The zero-based index of the page to retrieve.</param>

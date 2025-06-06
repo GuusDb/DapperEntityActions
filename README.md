@@ -141,6 +141,10 @@ var update = await dbContext.Tests.UpdateAsync(new TestLalala
 await dbContext.Tests.GetByIdAsync(5);
 await dbContext.Tests.DeleteAsync(5);
 
+// IMPORTANT: You must call Commit() to persist changes to the database
+// after Insert, Update, or Delete operations
+dbContext.Commit();
+
 // Linq like query NEW version
      var specificTests = await dbContext.Tests
          .Where(x => x.TestCd == "Zoko")
@@ -176,13 +180,79 @@ var specificTests = await dbContext.Tests.WhereAsync(x =>x.IsAcive );
 DbContext.Tests.GetAllAsync
 
 ```
+## Persisting Changes
+
+When using Insert, Update, or Delete operations, you must call `dbContext.Commit()` to persist your changes to the database:
+
+```C#
+// Insert a new entity
+await dbContext.Plants.InsertAsync<string>(new Plant {
+    PlantCd = "PLANT5",
+    Description = "New Plant",
+    IsAcive = true
+});
+
+// Update an existing entity
+await dbContext.Plants.UpdateAsync(new Plant {
+    PlantCd = "PLANT5",
+    Description = "Updated Plant",
+    IsAcive = false
+});
+
+// Delete an entity
+await dbContext.Plants.DeleteAsync<string>("PLANT5");
+
+// Commit the transaction to persist all changes
+dbContext.Commit();
+
+// If you need to rollback changes instead
+// dbContext.Rollback();
+```
+
+The library uses transactions to ensure data consistency. Without calling `Commit()`, your changes will be rolled back when the DbContext is disposed.
+
 ## Pagination
 ```C#
   var specificTests = await dbContext.Tests
            // Other linq queries
-            .Paginate(0,50) // paginate(pageIndex, pageSize), this gives records 0-50 
+            .Paginate(0,50) // paginate(pageIndex, pageSize), this gives records 0-50
             .ExecuteAsync();
 ```
+
+## Select
+The Select feature allows you to project entities to a different type, similar to Entity Framework Core's Select method. This optimizes your queries by only retrieving the columns you need from the database.
+
+```C#
+// Select specific properties
+var descriptions = await dbContext.Plants
+    .Select(p => p.Description)
+    .ExecuteAsync();
+
+// Project to an anonymous type
+var plantInfo = await dbContext.Plants
+    .Select(p => new { p.PlantCd, p.Description })
+    .ExecuteAsync();
+
+// Combine with Where (filtering happens at the database level)
+var activePlants = await dbContext.Plants
+    .Select(p => new { p.PlantCd, p.Description })
+    .Where(p => p.IsAcive)
+    .ExecuteAsync();
+
+// Combine with OrderBy
+var orderedPlants = await dbContext.Plants
+    .Select(p => new { p.PlantCd, p.Description })
+    .OrderBy(p => p.Description)
+    .ExecuteAsync();
+
+// Combine with Paginate
+var pagedPlants = await dbContext.Plants
+    .Select(p => new { p.PlantCd, p.Description })
+    .Paginate(0, 10)
+    .ExecuteAsync();
+```
+
+The Select method modifies the SQL SELECT statement to only include the specified columns, which is more efficient than retrieving all columns. It also supports filtering on properties that are not included in the Select projection, with the filtering happening at the database level.
 
 ## Logging
 If you want to log the queries, you need to put miminum log level to "Information" and use serilog.

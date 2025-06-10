@@ -67,6 +67,27 @@ public abstract class TestSetup : IDisposable
                 is_active INTEGER,
                 FOREIGN KEY (parent_id) REFERENCES parent(parent_id)
             )");
+            
+        Connection.Execute(@"
+            CREATE TABLE auditable_entity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_on TEXT
+            )");
+            
+        Connection.Execute(@"
+            CREATE TABLE entity_with_created_date (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_date TEXT
+            )");
+            
+        Connection.Execute(@"
+            CREATE TABLE custom_property_entity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                custom_date_field TEXT
+            )");
     }
 
     private void SeedData()

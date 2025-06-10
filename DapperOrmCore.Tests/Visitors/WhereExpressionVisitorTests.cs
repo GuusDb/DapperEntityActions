@@ -139,7 +139,7 @@ namespace DapperOrmCore.Tests.Visitors
         {
             // Arrange
             var visitor = new WhereExpressionVisitor<CoolMeasurement>(_propertyMap, _navigationProperties, _referencedNavProps);
-            
+
             // Setup property map for Plant with boolean property
             var plantPropertyMap = typeof(Plant).GetProperties()
                 .Where(p => p.GetCustomAttribute<NotMappedAttribute>() == null)
@@ -147,7 +147,7 @@ namespace DapperOrmCore.Tests.Visitors
                     p => p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name,
                     p => p,
                     StringComparer.OrdinalIgnoreCase);
-                    
+
             var plantVisitor = new WhereExpressionVisitor<Plant>(plantPropertyMap, new Dictionary<string, NavigationPropertyInfo>(), new List<string>());
             Expression<Func<Plant, bool>> expression = p => p.IsAcive;
 
@@ -170,7 +170,7 @@ namespace DapperOrmCore.Tests.Visitors
                     p => p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name,
                     p => p,
                     StringComparer.OrdinalIgnoreCase);
-                    
+
             var plantVisitor = new WhereExpressionVisitor<Plant>(plantPropertyMap, new Dictionary<string, NavigationPropertyInfo>(), new List<string>());
             Expression<Func<Plant, bool>> expression = p => !p.IsAcive;
 
@@ -187,7 +187,7 @@ namespace DapperOrmCore.Tests.Visitors
         {
             // Arrange
             var visitor = new WhereExpressionVisitor<CoolMeasurement>(_propertyMap, _navigationProperties, _referencedNavProps);
-            
+
             // Setup property map for TestLalala with string property
             var testPropertyMap = typeof(TestLalala).GetProperties()
                 .Where(p => p.GetCustomAttribute<NotMappedAttribute>() == null)
@@ -195,9 +195,8 @@ namespace DapperOrmCore.Tests.Visitors
                     p => p.GetCustomAttribute<ColumnAttribute>()?.Name ?? p.Name,
                     p => p,
                     StringComparer.OrdinalIgnoreCase);
-                    
+
             var testVisitor = new WhereExpressionVisitor<TestLalala>(testPropertyMap, new Dictionary<string, NavigationPropertyInfo>(), new List<string>());
-            // Use a simpler expression without the null check to match expected SQL
             Expression<Func<TestLalala, bool>> expression = t => t.Description.Contains("Test");
 
             // Act
@@ -214,7 +213,7 @@ namespace DapperOrmCore.Tests.Visitors
         {
             // Arrange
             var visitor = new WhereExpressionVisitor<CoolMeasurement>(_propertyMap, _navigationProperties, _referencedNavProps);
-            Expression<Func<CoolMeasurement, bool>> expression = 
+            Expression<Func<CoolMeasurement, bool>> expression =
                 m => (m.Value > 100 && m.TestCd == "TEST1") || (m.Value < 50 && m.PlantCd == "PLANT2");
 
             // Act

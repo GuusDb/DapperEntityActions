@@ -271,6 +271,416 @@ Joins can be done with the include tag  (only one to one mapping currently one t
           .ExecuteAsync();
 ```
 
+## Interceptors
+
+Interceptors provide a powerful way to hook into the entity lifecycle, allowing you to execute custom logic before or after insert and update operations. This feature gives you complete control over what happens at these critical points.
+
+### Basic Usage
+
+```C#
+// Create a DbContext with interceptors
+public class ApplicationDbContext : IDisposable
+{
+    private readonly NpgsqlConnection _connection;
+    private IDbTransaction _transaction;
+
+    public DapperSet<TestLalala> Tests { get; }
+
+    public ApplicationDbContext(string connectionString)
+    {
+        _connection = new NpgsqlConnection(connectionString);
+        _connection.Open();
+        _transaction = _connection.BeginTransaction();
+        
+        // Create your custom interceptor
+        var yourInterceptor = new YourCustomInterceptor();
+        
+        // Use the interceptor with a DapperSet
+        Tests = new DapperSet<TestLalala>(_connection, _transaction, yourInterceptor);
+    }
+
+    // ... Commit, Rollback, Dispose methods
+}
+```
+
+### Creating Interceptors
+
+You can create interceptors by implementing `ISaveChangesInterceptor` or extending the `SaveChangesInterceptor` base class. This gives you complete freedom to decide what happens before or after insert/update operations:
+
+```C#
+public class YourCustomInterceptor : SaveChangesInterceptor
+{
+    // Called before an entity is inserted
+    public override Task BeforeInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        // Your custom logic here
+        if (entity is TestLalala test)
+        {
+            // For example, set creation date
+            test.CreatedDate = DateTime.UtcNow;
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    // Called after an entity is inserted
+    public override Task AfterInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        // Post-insert logic here
+        return Task.CompletedTask;
+    }
+    
+    // Called before an entity is updated
+    public override Task BeforeUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        // Your custom update logic here
+        if (entity is TestLalala test)
+        {
+            // For example, set last edit date
+            test.LastEditDate = DateTime.UtcNow;
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    // Called after an entity is updated
+    public override Task AfterUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        // Post-update logic here
+        return Task.CompletedTask;
+    }
+}
+```
+
+### Example: Audit Interceptor
+
+Here's an example of an interceptor that handles both creation and modification dates:
+
+```C#
+public class AuditInterceptor : SaveChangesInterceptor
+{
+    public override Task BeforeInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        if (entity is TestLalala test)
+        {
+            // Set creation date on insert
+            test.CreatedDate = DateTime.UtcNow;
+            // Initialize last edit date to same value
+            test.LastEditDate = test.CreatedDate;
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    public override Task BeforeUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        if (entity is TestLalala test)
+        {
+            // Only update the last edit date, not the creation date
+            test.LastEditDate = DateTime.UtcNow;
+        }
+        
+        return Task.CompletedTask;
+    }
+}
+```
+
+### Multiple Interceptors
+
+You can use multiple interceptors together, and they will be executed in the order they are provided:
+
+```C#
+// Create multiple interceptors
+var auditInterceptor = new AuditInterceptor();
+var validationInterceptor = new ValidationInterceptor();
+var loggingInterceptor = new LoggingInterceptor();
+
+// Use them together
+var entitySet = new DapperSet<TestLalala>(
+    _connection,
+    _transaction,
+    auditInterceptor,  // Executed first
+    validationInterceptor,  // Executed second
+    loggingInterceptor  // Executed third
+);
+```
+
+### Example: Validation Interceptor
+
+```C#
+public class ValidationInterceptor : SaveChangesInterceptor
+{
+    public override Task BeforeInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        ValidateEntity(entity);
+        return Task.CompletedTask;
+    }
+    
+    public override Task BeforeUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        ValidateEntity(entity);
+        return Task.CompletedTask;
+    }
+    
+    private void ValidateEntity(object entity)
+    {
+        if (entity is TestLalala test)
+        {
+            // Perform validation
+            if (string.IsNullOrEmpty(test.Description))
+            {
+                throw new ArgumentException("Description cannot be empty");
+            }
+            
+            if (test.Precision < 0 || test.Precision > 100)
+            {
+                throw new ArgumentException("Precision must be between 0 and 100");
+            }
+        }
+    }
+}
+```
+
+### Example: Logging Interceptor
+
+```C#
+public class LoggingInterceptor : SaveChangesInterceptor
+{
+    private readonly ILogger _logger;
+    
+    public LoggingInterceptor(ILogger logger)
+    {
+        _logger = logger;
+    }
+    
+    public override Task BeforeInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation($"Inserting entity of type {entity.GetType().Name}");
+        return Task.CompletedTask;
+    }
+    
+    public override Task AfterInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation($"Successfully inserted entity of type {entity.GetType().Name}");
+        return Task.CompletedTask;
+    }
+    
+    public override Task BeforeUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation($"Updating entity of type {entity.GetType().Name}");
+        return Task.CompletedTask;
+    }
+    
+    public override Task AfterUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation($"Successfully updated entity of type {entity.GetType().Name}");
+        return Task.CompletedTask;
+    }
+}
+```
+
+### Example: User Tracking Interceptor
+
+This advanced interceptor tracks which user created or last modified an entity, providing accountability in multi-user systems:
+
+```C#
+public class UserTrackingInterceptor : SaveChangesInterceptor
+{
+    // Current user context
+    public string CurrentUser { get; set; }
+    public string CurrentRole { get; set; }
+
+    public UserTrackingInterceptor(string initialUser, string initialRole)
+    {
+        CurrentUser = initialUser;
+        CurrentRole = initialRole;
+    }
+
+    public override Task BeforeInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        if (entity is IUserTrackable trackable)
+        {
+            // Set both created and last edited fields on insert
+            trackable.CreatedBy = CurrentUser;
+            trackable.CreatedRole = CurrentRole;
+            trackable.LastEditedBy = CurrentUser;
+            trackable.LastEditedRole = CurrentRole;
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    public override Task BeforeUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        if (entity is IUserTrackable trackable)
+        {
+            // Only update the last edited fields, preserve creation info
+            trackable.LastEditedBy = CurrentUser;
+            trackable.LastEditedRole = CurrentRole;
+        }
+        
+        return Task.CompletedTask;
+    }
+}
+
+// Interface for trackable entities
+public interface IUserTrackable
+{
+    string CreatedBy { get; set; }
+    string CreatedRole { get; set; }
+    string LastEditedBy { get; set; }
+    string LastEditedRole { get; set; }
+}
+
+// Example entity implementing the interface
+public class UserTrackableEntity : IUserTrackable
+{
+    [Key]
+    [Column("id")]
+    public int Id { get; set; }
+    
+    [Column("name")]
+    public string Name { get; set; }
+    
+    [Column("created_by")]
+    public string CreatedBy { get; set; }
+    
+    [Column("created_role")]
+    public string CreatedRole { get; set; }
+    
+    [Column("last_edited_by")]
+    public string LastEditedBy { get; set; }
+    
+    [Column("last_edited_role")]
+    public string LastEditedRole { get; set; }
+}
+```
+
+### Example: Versioning Interceptor
+
+This interceptor automatically manages version numbers for entities, which is useful for optimistic concurrency and tracking changes:
+
+```C#
+public class VersioningInterceptor : SaveChangesInterceptor
+{
+    public override Task BeforeInsertAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        if (entity is IVersionable versionable)
+        {
+            // Start at version 1 for new entities
+            versionable.Version = 1;
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    public override Task BeforeUpdateAsync(object entity, CancellationToken cancellationToken = default)
+    {
+        if (entity is IVersionable versionable)
+        {
+            // Increment version on each update
+            versionable.Version++;
+        }
+        
+        return Task.CompletedTask;
+    }
+}
+
+// Interface for versionable entities
+public interface IVersionable
+{
+    int Version { get; set; }
+}
+
+// Example entity implementing the interface
+public class VersionedEntity : IVersionable
+{
+    [Key]
+    [Column("id")]
+    public int Id { get; set; }
+    
+    [Column("name")]
+    public string Name { get; set; }
+    
+    [Column("version")]
+    public int Version { get; set; }
+}
+```
+
+### Example: Combining Multiple Interceptors
+
+This example shows how to combine multiple interceptors to create a comprehensive entity lifecycle management system:
+
+```C#
+// Create a DbContext with multiple interceptors
+public class ApplicationDbContext : IDisposable
+{
+    private readonly NpgsqlConnection _connection;
+    private IDbTransaction _transaction;
+
+    public DapperSet<ComplexEntity> ComplexEntities { get; }
+
+    public ApplicationDbContext(string connectionString, string currentUser, string currentRole)
+    {
+        _connection = new NpgsqlConnection(connectionString);
+        _connection.Open();
+        _transaction = _connection.BeginTransaction();
+        
+        // Create multiple interceptors
+        var auditInterceptor = new AuditInterceptor();
+        var userTrackingInterceptor = new UserTrackingInterceptor(currentUser, currentRole);
+        var versioningInterceptor = new VersioningInterceptor();
+        var validationInterceptor = new ValidationInterceptor();
+        
+        // Use them together with a DapperSet
+        ComplexEntities = new DapperSet<ComplexEntity>(
+            _connection,
+            _transaction,
+            auditInterceptor,        // Handles creation and modification dates
+            userTrackingInterceptor, // Tracks who created/modified the entity
+            versioningInterceptor,   // Manages version numbers
+            validationInterceptor    // Validates the entity before saving
+        );
+    }
+
+    // ... Commit, Rollback, Dispose methods
+}
+
+// A complex entity that implements multiple interfaces
+public class ComplexEntity : IUserTrackable, IVersionable
+{
+    [Key]
+    [Column("id")]
+    public int Id { get; set; }
+    
+    [Column("name")]
+    public string Name { get; set; }
+    
+    [Column("created_date")]
+    public DateTime CreatedDate { get; set; }
+    
+    [Column("last_edit_date")]
+    public DateTime LastEditDate { get; set; }
+    
+    [Column("created_by")]
+    public string CreatedBy { get; set; }
+    
+    [Column("created_role")]
+    public string CreatedRole { get; set; }
+    
+    [Column("last_edited_by")]
+    public string LastEditedBy { get; set; }
+    
+    [Column("last_edited_role")]
+    public string LastEditedRole { get; set; }
+    
+    [Column("version")]
+    public int Version { get; set; }
+}
+```
+
+This approach allows you to build a modular, maintainable system where each interceptor handles a specific concern, following the Single Responsibility Principle.
+
 Classes need to be annotated like this with the NotMapped and ForeignKey tag
 ```C#
  [Table("ipc.measurement")]

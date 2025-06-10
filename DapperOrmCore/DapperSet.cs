@@ -6,6 +6,7 @@ using Dapper;
 using System.Text.RegularExpressions;
 using System.Linq.Expressions;
 using DapperOrmCore.Models;
+using DapperOrmCore.Interceptors;
 
 namespace DapperOrmCore;
 
@@ -25,6 +26,7 @@ public class DapperSet<T> : IDisposable where T : class
     private readonly Type _primaryKeyType;
     private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;
     private readonly DapperQuery<T> _query;
+    private readonly InterceptorManager _interceptorManager;
     private bool _disposed = false;
 
     /// <summary>
@@ -35,10 +37,29 @@ public class DapperSet<T> : IDisposable where T : class
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
     /// <exception cref="ArgumentException">Thrown when the table or schema name is invalid.</exception>
-    public DapperSet(IDbConnection connection, IDbTransaction transaction = null)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperSet{T}"/> class.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="transaction">An optional database transaction to associate with operations.</param>
+    /// <param name="interceptors">Optional interceptors to use for operations.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
+    /// <exception cref="ArgumentException">Thrown when the table or schema name is invalid.</exception>
+    public DapperSet(IDbConnection connection, IDbTransaction transaction = null, params ISaveChangesInterceptor[] interceptors)
     {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _transaction = transaction;
+        _interceptorManager = new InterceptorManager();
+        
+        // Add interceptors if provided
+        if (interceptors != null)
+        {
+            foreach (var interceptor in interceptors)
+            {
+                _interceptorManager.AddInterceptor(interceptor);
+            }
+        }
 
         // Validate full table name (with schema if present)
         string rawTableName = typeof(T).GetCustomAttribute<TableAttribute>()?.Name ?? typeof(T).Name;
@@ -378,6 +399,9 @@ public class DapperSet<T> : IDisposable where T : class
             throw new ArgumentException($"TKey type '{typeof(TKey).Name}' does not match primary key type '{_primaryKeyType.Name}'");
         }
 
+        // Call interceptors before insert
+        await _interceptorManager.BeforeInsertAsync(entity);
+
         var columns = _propertyMap
             .Where(p => _primaryKeyType == typeof(string) ? true : !string.Equals(p.Key, _primaryKeyColumnName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -395,6 +419,10 @@ public class DapperSet<T> : IDisposable where T : class
         try
         {
             var result = await _connection.ExecuteScalarAsync<TKey>(sql, entity, _transaction);
+            
+            // Call interceptors after insert
+            await _interceptorManager.AfterInsertAsync(entity);
+            
             return result;
         }
         catch (Exception ex)
@@ -419,6 +447,9 @@ public class DapperSet<T> : IDisposable where T : class
             throw new ArgumentNullException(nameof(entity));
         }
 
+        // Call interceptors before update
+        await _interceptorManager.BeforeUpdateAsync(entity);
+
         var columns = _propertyMap
             .Where(p => !string.Equals(p.Key, _primaryKeyColumnName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -431,6 +462,9 @@ public class DapperSet<T> : IDisposable where T : class
         {
             throw new InvalidOperationException("No rows were updated. Entity may not exist.");
         }
+
+        // Call interceptors after update
+        await _interceptorManager.AfterUpdateAsync(entity);
 
         return rowsAffected > 0;
     }

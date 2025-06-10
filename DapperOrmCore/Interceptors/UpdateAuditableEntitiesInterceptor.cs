@@ -44,7 +44,6 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
         var entityType = entity.GetType();
         var currentDateTime = _dateTimeProvider();
 
-        // Look for any property that matches our creation property names
         foreach (var propertyName in _creationPropertyNames)
         {
             var property = entityType.GetProperty(propertyName,
@@ -52,17 +51,15 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
 
             if (property != null && property.CanWrite)
             {
-                // Check if the property type is compatible with DateTime
                 if (property.PropertyType == typeof(DateTime) ||
                     property.PropertyType == typeof(DateTime?))
                 {
-                    // Only set the value if it's the default value (not already set)
                     var currentValue = property.GetValue(entity);
                     if (currentValue == null ||
                         (property.PropertyType == typeof(DateTime) && (DateTime)currentValue == default))
                     {
                         property.SetValue(entity, currentDateTime);
-                        break; // Set only the first matching property
+                        break; 
                     }
                 }
             }

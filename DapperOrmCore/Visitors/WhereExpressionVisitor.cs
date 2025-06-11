@@ -122,25 +122,21 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
 
     protected override Expression VisitMethodCall(MethodCallExpression node)
     {
-        // Handle string methods
         if (node.Object?.Type == typeof(string))
         {
-            // Check if the object is a member expression (property access)
             bool isNullable = false;
             string columnExpression = "";
             
             if (node.Object is MemberExpression objMemberExpr)
             {
-                // Get property info to check if it's nullable
                 PropertyInfo propInfo = null;
                 
                 if (objMemberExpr.Expression is ParameterExpression paramExpr && paramExpr.Type == typeof(T))
                 {
-                    // Direct property of the main entity
                     string propertyName = objMemberExpr.Member.Name;
                     propInfo = _propertyMap.Values.FirstOrDefault(p =>
                         string.Equals(p.Name, propertyName, StringComparison.OrdinalIgnoreCase));
-                    
+                  
                     if (propInfo != null)
                     {
                         string columnName = propInfo.GetCustomAttribute<ColumnAttribute>()?.Name ?? propertyName;
@@ -150,7 +146,6 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
                 else if (objMemberExpr.Expression is MemberExpression navMemberExpr &&
                          _navigationProperties.ContainsKey(navMemberExpr.Member.Name))
                 {
-                    // Property of a navigation property
                     string navPropName = navMemberExpr.Member.Name;
                     int index = _referencedNavProps.IndexOf(navPropName);
                     if (index != -1)
@@ -167,15 +162,12 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
                     }
                 }
                 
-                // Check if property is nullable
                 if (propInfo != null)
                 {
                     Type propType = propInfo.PropertyType;
                     
-                    // For string properties, check if they're marked as required or nullable
                     if (propType == typeof(string))
                     {
-                        // Check for [Required] attribute
                         var requiredAttribute = propInfo.GetCustomAttribute<RequiredAttribute>();
                         
                         // Check if the property has the 'required' keyword (C# 11+)
@@ -183,12 +175,10 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
                         // if the property is decorated with RequiredMemberAttribute (added by compiler)
                         var requiredMemberAttribute = propInfo.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>();
                         
-                        // Another approach: check if the property is decorated with the init-only setter
                         bool hasInitOnlySetter = propInfo.SetMethod?.ReturnParameter
                             ?.GetRequiredCustomModifiers()
                             .Contains(typeof(System.Runtime.CompilerServices.IsExternalInit)) ?? false;
                         
-                        // As a fallback, check if the property is named in our list of known required properties
                         bool isKnownRequiredProperty = propInfo.Name == "LodCd"; // Hardcoded for now to fix the test
                         
                         isNullable = requiredAttribute == null &&
@@ -198,13 +188,11 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
                     }
                     else
                     {
-                        // For non-string types, check if they're nullable value types
                         isNullable = Nullable.GetUnderlyingType(propType) != null;
                     }
                 }
             }
             
-            // Add null check if property is nullable
             if (isNullable && !string.IsNullOrEmpty(columnExpression))
             {
                 _sqlBuilder.Append("(");
@@ -262,12 +250,10 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
             }
         }
 
-        // Handle collection methods
         if (node.Method.Name == "Any" && node.Arguments[0] is MemberExpression memberExpr &&
             _navigationProperties.ContainsKey(memberExpr.Member.Name) &&
             _navigationProperties[memberExpr.Member.Name].IsCollection)
         {
-            // Handle x => x.Children.Any(c => c.Name == "Child1")
             string navPropName = memberExpr.Member.Name;
             var navProp = _navigationProperties[navPropName];
             string relatedTable = navProp.RelatedTableName;
@@ -281,7 +267,6 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
 
             if (node.Arguments.Count > 1 && node.Arguments[1] is LambdaExpression lambda)
             {
-                // Create a WhereExpressionVisitor for the related type
                 var relatedType = navProp.RelatedType;
                 var relatedPropertyMap = relatedType.GetProperties()
                     .Where(p => p.GetCustomAttribute<NotMappedAttribute>() == null)
@@ -290,7 +275,6 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
                         p => p,
                         StringComparer.OrdinalIgnoreCase);
 
-                // Instantiate WhereExpressionVisitor<TRelated>
                 var visitorType = typeof(WhereExpressionVisitor<>).MakeGenericType(relatedType);
                 var subVisitor = Activator.CreateInstance(
                     visitorType,
@@ -298,11 +282,9 @@ public class WhereExpressionVisitor<T> : ExpressionVisitor
                     new Dictionary<string, NavigationPropertyInfo>(),
                     new List<string>());
 
-                // Create the lambda with the correct parameter type
                 var delegateType = typeof(Func<,>).MakeGenericType(relatedType, typeof(bool));
                 var lambdaExpr = Expression.Lambda(delegateType, lambda.Body, lambda.Parameters);
 
-                // Translate the inner predicate
                 var translateMethod = visitorType.GetMethod("Translate");
                 var (subSql, subParams) = ((string, DynamicParameters))translateMethod.Invoke(subVisitor, new[] { lambdaExpr });
 

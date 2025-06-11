@@ -197,15 +197,26 @@ namespace DapperOrmCore.Tests.Visitors
                     StringComparer.OrdinalIgnoreCase);
 
             var testVisitor = new WhereExpressionVisitor<TestLalala>(testPropertyMap, new Dictionary<string, NavigationPropertyInfo>(), new List<string>());
-            Expression<Func<TestLalala, bool>> expression = t => t.Description.Contains("Test");
+            Expression<Func<TestLalala, bool>> expression = t => t.Description != null && t.Description.Contains("Test");
 
             // Act
             var (sql, parameters) = testVisitor.Translate(expression);
 
             // Assert
-            // Update the expected SQL to match what the visitor actually generates
             Assert.Contains("LIKE @", sql);
-            Assert.Equal("%Test%", parameters.Get<object>("p0"));
+
+            bool foundLikeParam = false;
+            foreach (var paramName in parameters.ParameterNames)
+            {
+                var value = parameters.Get<object>(paramName);
+                if (value is string strValue && strValue == "%Test%")
+                {
+                    foundLikeParam = true;
+                    break;
+                }
+            }
+
+            Assert.True(foundLikeParam, "Should have a parameter with value '%Test%'");
         }
 
         [Fact]

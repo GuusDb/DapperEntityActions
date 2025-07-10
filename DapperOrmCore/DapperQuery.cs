@@ -291,7 +291,23 @@ public class DapperQuery<T> where T : class
     /// </summary>
     /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <summary>
+    /// Executes the query and returns the results.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     public async Task<IEnumerable<T>> ExecuteAsync()
+    {
+        return await ExecuteAsync(_transaction);
+    }
+
+    /// <summary>
+    /// Executes the query and returns the results using the specified transaction.
+    /// </summary>
+    /// <param name="transaction">The transaction to use for this operation.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    public async Task<IEnumerable<T>> ExecuteAsync(IDbTransaction? transaction)
     {
         var sqlBuilder = new StringBuilder();
         var selectColumns = new List<string> { $"t.*" };
@@ -418,7 +434,7 @@ public class DapperQuery<T> where T : class
             }
             else
             {
-                return await _connection.QueryAsync<T>(sql, _parameters, transaction: _transaction);
+                return await _connection.QueryAsync<T>(sql, _parameters, transaction: transaction);
             }
         }
 
@@ -464,7 +480,7 @@ public class DapperQuery<T> where T : class
                 return existing;
             },
             _parameters,
-            transaction: _transaction,
+            transaction: transaction,
             splitOn: string.Join(",", splitOn)
         );
 

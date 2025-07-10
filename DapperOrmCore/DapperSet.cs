@@ -291,10 +291,16 @@ public class DapperSet<T> : IDisposable where T : class
     /// </summary>
     /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
-    public async Task<IEnumerable<T>> ExecuteAsync()
+    /// <summary>
+    /// Executes the query and returns the results.
+    /// </summary>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the query results.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    public async Task<IEnumerable<T>> ExecuteAsync(IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
-        return await _query.ExecuteAsync();
+        return await _query.ExecuteAsync(transaction ?? _transaction);
     }
 
     /// <summary>
@@ -386,7 +392,18 @@ public class DapperSet<T> : IDisposable where T : class
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="entity"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no columns are available for insertion or the insert operation fails.</exception>
-    public async Task<TKey> InsertAsync<TKey>(T entity)
+    /// <summary>
+    /// Inserts a new entity into the table and returns its primary key.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="entity">The entity to insert.</param>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the primary key of the inserted entity.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entity"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no columns are available for insertion or the insert operation fails.</exception>
+    public async Task<TKey> InsertAsync<TKey>(T entity, IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
         if (entity == null)
@@ -418,7 +435,7 @@ public class DapperSet<T> : IDisposable where T : class
 
         try
         {
-            var result = await _connection.ExecuteScalarAsync<TKey>(sql, entity, _transaction);
+            var result = await _connection.ExecuteScalarAsync<TKey>(sql, entity, transaction ?? _transaction);
             
             // Call interceptors after insert
             await _interceptorManager.AfterInsertAsync(entity);
@@ -439,7 +456,16 @@ public class DapperSet<T> : IDisposable where T : class
     /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="entity"/> is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no rows are updated (e.g., entity does not exist).</exception>
-    public async Task<bool> UpdateAsync(T entity)
+    /// <summary>
+    /// Updates an existing entity in the table.
+    /// </summary>
+    /// <param name="entity">The entity to update.</param>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, indicating whether the update was successful.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="entity"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no rows are updated (e.g., entity does not exist).</exception>
+    public async Task<bool> UpdateAsync(T entity, IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
         if (entity == null)
@@ -457,7 +483,7 @@ public class DapperSet<T> : IDisposable where T : class
         string setClause = string.Join(", ", columns.Select(p => $"{p.Key} = @{p.Value.Name}"));
         string sql = $"UPDATE {_fullTableName} SET {setClause} WHERE {_primaryKeyColumnName} = @{GetPropertyName(_primaryKeyColumnName)}";
 
-        int rowsAffected = await _connection.ExecuteAsync(sql, entity, _transaction);
+        int rowsAffected = await _connection.ExecuteAsync(sql, entity, transaction ?? _transaction);
         if (rowsAffected == 0)
         {
             throw new InvalidOperationException("No rows were updated. Entity may not exist.");
@@ -479,7 +505,18 @@ public class DapperSet<T> : IDisposable where T : class
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no rows are deleted (e.g., entity does not exist).</exception>
-    public async Task<bool> DeleteAsync<TKey>(TKey id)
+    /// <summary>
+    /// Deletes an entity from the table by its primary key.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="id">The primary key value of the entity to delete.</param>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, indicating whether the deletion was successful.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no rows are deleted (e.g., entity does not exist).</exception>
+    public async Task<bool> DeleteAsync<TKey>(TKey id, IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
         if (id == null)
@@ -493,7 +530,7 @@ public class DapperSet<T> : IDisposable where T : class
         }
 
         string sql = $"DELETE FROM {_fullTableName} WHERE {_primaryKeyColumnName} = @Id";
-        int rowsAffected = await _connection.ExecuteAsync(sql, new { Id = id }, _transaction);
+        int rowsAffected = await _connection.ExecuteAsync(sql, new { Id = id }, transaction ?? _transaction);
         if (rowsAffected == 0)
         {
             throw new InvalidOperationException("No rows were deleted. Entity may not exist.");

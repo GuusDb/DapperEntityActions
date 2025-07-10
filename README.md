@@ -90,6 +90,12 @@ public class ApplicationDbContext : IDisposable
     private readonly NpgsqlConnection _connection;
     private IDbTransaction _transaction;
 
+    // Expose the connection for custom transaction management
+    public IDbConnection Connection => _connection;
+    
+    // Expose the current transaction
+    public IDbTransaction Transaction => _transaction;
+
     // The entity we just made
     public DapperSet<Plant> Plants { get; }
 
@@ -210,6 +216,40 @@ dbContext.Commit();
 ```
 
 The library uses transactions to ensure data consistency. Without calling `Commit()`, your changes will be rolled back when the DbContext is disposed.
+
+## Transaction Management
+
+The library supports two ways to manage transactions:
+
+1. **Default Transaction**: By default, all operations use the transaction provided in the DbContext constructor.
+
+2. **Custom Transaction**: You can now provide a specific transaction to individual CRUD operations, which will override the default transaction.
+
+### Using Custom Transactions
+
+Each CRUD method (`ExecuteAsync`, `InsertAsync`, `UpdateAsync`, and `DeleteAsync`) accepts an optional transaction parameter:
+
+```C#
+// Using the default transaction from DbContext
+await dbContext.Plants.InsertAsync<string>(newPlant);
+
+// Using a custom transaction
+using var customTransaction = dbContext.Connection.BeginTransaction();
+await dbContext.Plants.InsertAsync<string>(newPlant, customTransaction);
+customTransaction.Commit();
+
+// Multiple operations within the same custom transaction
+using var transaction = dbContext.Connection.BeginTransaction();
+await dbContext.Plants.InsertAsync<string>(newPlant, transaction);
+await dbContext.Tests.UpdateAsync(existingTest, transaction);
+await dbContext.Measurements.DeleteAsync<int>(measurementId, transaction);
+transaction.Commit();
+```
+
+This feature is useful when you need to:
+- Perform operations across multiple DbContext instances with the same transaction
+- Control transaction scope more precisely
+- Implement custom transaction management logic
 
 ## Pagination
 ```C#

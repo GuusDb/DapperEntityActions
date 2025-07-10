@@ -314,7 +314,19 @@ public class DapperSet<T> : IDisposable where T : class
     /// <returns>A task that represents the asynchronous operation, containing the entity with related data, or null if not found.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
-    public async Task<T> GetByIdWithRelatedAsync<TKey>(TKey id, string relatedTableFullName, string foreignKey, string splitOn)
+    /// <summary>
+    /// Retrieves an entity by its primary key, including related data.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="id">The primary key value of the entity.</param>
+    /// <param name="relatedTableFullName">The full name of the related table (e.g., 'schema.table').</param>
+    /// <param name="foreignKey">The foreign key column in the related table.</param>
+    /// <param name="splitOn">The column name to split the result set for multi-mapping.</param>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the entity with related data, or null if not found.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
+    public async Task<T> GetByIdWithRelatedAsync<TKey>(TKey id, string relatedTableFullName, string foreignKey, string splitOn, IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
         string sql = $@"
@@ -337,7 +349,7 @@ public class DapperSet<T> : IDisposable where T : class
                 return existing;
             },
             new { Id = id },
-            transaction: _transaction,
+            transaction: transaction ?? _transaction,
             splitOn: splitOn
         );
 
@@ -349,11 +361,17 @@ public class DapperSet<T> : IDisposable where T : class
     /// </summary>
     /// <returns>A task that represents the asynchronous operation, containing all entities.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
-    public async Task<IEnumerable<T?>> GetAllAsync()
+    /// <summary>
+    /// Retrieves all entities from the table.
+    /// </summary>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, containing all entities.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    public async Task<IEnumerable<T?>> GetAllAsync(IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
         string sql = $"SELECT * FROM {_fullTableName}";
-        return await _connection.QueryAsync<T>(sql, transaction: _transaction);
+        return await _connection.QueryAsync<T>(sql, transaction: transaction ?? _transaction);
     }
 
     /// <summary>
@@ -365,7 +383,17 @@ public class DapperSet<T> : IDisposable where T : class
     /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
-    public async Task<T?> GetByIdAsync<TKey>(TKey id)
+    /// <summary>
+    /// Retrieves an entity by its primary key.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the primary key.</typeparam>
+    /// <param name="id">The primary key value of the entity.</param>
+    /// <param name="transaction">Optional transaction to use for this operation. If provided, overrides the transaction specified in the constructor.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the entity, or null if not found.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown if the <see cref="DapperSet{T}"/> instance has been disposed.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <typeparamref name="TKey"/> does not match the primary key type.</exception>
+    public async Task<T?> GetByIdAsync<TKey>(TKey id, IDbTransaction? transaction = null)
     {
         EnsureNotDisposed();
         if (id == null)
@@ -379,7 +407,7 @@ public class DapperSet<T> : IDisposable where T : class
         }
 
         string sql = $"SELECT * FROM {_fullTableName} WHERE {_primaryKeyColumnName} = @Id";
-        return await _connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, _transaction);
+        return await _connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, transaction ?? _transaction);
     }
 
     /// <summary>

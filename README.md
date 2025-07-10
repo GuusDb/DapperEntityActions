@@ -243,6 +243,11 @@ using var transaction = dbContext.Connection.BeginTransaction();
 await dbContext.Plants.InsertAsync<string>(newPlant, transaction);
 await dbContext.Tests.UpdateAsync(existingTest, transaction);
 await dbContext.Measurements.DeleteAsync<int>(measurementId, transaction);
+
+// Query operations also support transactions
+var plant = await dbContext.Plants.GetByIdAsync<string>("PLANT1", transaction);
+var allPlants = await dbContext.Plants.GetAllAsync(transaction);
+
 transaction.Commit();
 ```
 

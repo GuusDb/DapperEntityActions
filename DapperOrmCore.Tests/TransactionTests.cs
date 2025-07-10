@@ -170,6 +170,46 @@ public class TransactionTests : IDisposable
         Assert.Equal("Plant 2", plantAfterRollback.Description);
     }
 
+    [Fact]
+    public async Task GetByIdAsync_WithTransaction_ShouldReturnEntityWithinTransaction()
+    {
+        // Arrange
+        using var transaction = _dbContext.BeginTransaction();
+
+        // Act
+        var plant = await _dbContext.Plants.GetByIdAsync<string>("PLANT1", transaction);
+        
+        // Assert
+        Assert.NotNull(plant);
+        Assert.Equal("Plant 1", plant.Description);
+        Assert.True(plant.IsAcive);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WithTransaction_ShouldRespectTransactionRollback()
+    {
+        // Arrange
+        var newPlant = new Plant { PlantCd = "PLANT7", Description = "Plant 7", IsAcive = true };
+        using var transaction = _dbContext.BeginTransaction();
+        
+        // Insert a new plant within the transaction
+        await _dbContext.Plants.InsertAsync<string>(newPlant, transaction);
+        
+        // Act - This should find the plant within the same transaction
+        var plantWithinTx = await _dbContext.Plants.GetByIdAsync<string>("PLANT7", transaction);
+        
+        // Assert the plant exists within the transaction
+        Assert.NotNull(plantWithinTx);
+        Assert.Equal("Plant 7", plantWithinTx.Description);
+        
+        // Rollback the transaction
+        _dbContext.Rollback();
+        
+        // After rollback, the plant should not exist
+        var plantAfterRollback = await _dbContext.Plants.GetByIdAsync<string>("PLANT7");
+        Assert.Null(plantAfterRollback); // Should not exist after rollback
+    }
+
     public void Dispose()
     {
         _dbContext?.Dispose();

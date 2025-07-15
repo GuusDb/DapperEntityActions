@@ -1,0 +1,53 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore dapperEfLike.sln
+
+      - name: Build
+        run: dotnet build dapperEfLike.sln --configuration Release --no-restore
+
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Start Docker Containers
+        run: docker-compose up -d
+        
+      - name: Wait for Containers to be Ready
+        run: |
+          echo "Waiting for containers to be ready..."
+          sleep 30
+          
+      - name: Install Required Packages
+        run: |
+          dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package System.Data.SqlClient --source https://api.nuget.org/v3/index.json
+          dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package Npgsql --source https://api.nuget.org/v3/index.json
+
+      - name: Run Unit Tests
+        run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore --filter "FullyQualifiedName!~RealDatabasePaginationTests"
+        
+      - name: Run Integration Tests
+        run: dotnet test DapperOrmCore.Tests/DapperOrmCore.Tests.csproj --filter "FullyQualifiedName~RealDatabasePaginationTests"
+        
+      - name: Stop Docker Containers
+        run: docker-compose down
+        if: always()

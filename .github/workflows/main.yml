@@ -52,8 +52,37 @@ jobs:
       - name: Build
         run: dotnet build dapperEfLike.sln --configuration Release --no-restore -p:Version=${{ steps.minver.outputs.VERSION }}
 
-      - name: Test
+      # For the main branch, we'll run all tests including integration tests
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Install Docker Compose
+        run: |
+          # Install Docker Compose directly from GitHub releases
+          DOCKER_COMPOSE_VERSION=v2.24.6
+          sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose version
+        
+      - name: Start Docker Containers
+        run: docker-compose up -d
+        
+      - name: Wait for Containers to be Ready
+        run: |
+          echo "Waiting for containers to be ready..."
+          sleep 30
+          
+      - name: Install Required Packages
+        run: |
+          dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package System.Data.SqlClient --source https://api.nuget.org/v3/index.json
+          dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package Npgsql --source https://api.nuget.org/v3/index.json
+
+      - name: Run All Tests
         run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore
+        
+      - name: Stop Docker Containers
+        run: docker-compose down
+        if: always()
 
       - name: Pack
         run: |

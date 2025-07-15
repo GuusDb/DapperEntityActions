@@ -194,5 +194,48 @@ namespace DapperOrmCore.Tests.Visitors
             Assert.True(foundNameParam, "Should have a parameter with value 'Parent1'");
             Assert.True(foundBoolParam, "Should have a boolean parameter with value 'true'");
         }
+
+        [Fact]
+        public void Translate_NestedCollectionPredicates_ShouldGenerateCorrectSql()
+        {
+            // Arrange
+            var visitor = new WhereExpressionVisitor<Parent>(_propertyMap, _navigationProperties, _referencedNavProps);
+            Expression<Func<Parent, bool>> expression = p => p.Children.Any(c => c.Name.Contains("Child") || c.ChildId > 10);
+
+            // Act
+            var (sql, parameters) = visitor.Translate(expression);
+
+            // Assert
+            Assert.Contains("EXISTS (SELECT 1 FROM child c WHERE c.parent_id = t.parent_id AND", sql);
+            
+            // Check for the OR condition in the subquery
+            Assert.Contains("OR", sql);
+            
+            // Check for the LIKE condition
+            Assert.Contains("c.name LIKE @", sql);
+            
+            // Check for the > condition
+            Assert.Contains("c.child_id > @", sql);
+            
+            // Check parameters - order might vary
+            var paramNames = parameters.ParameterNames.ToList();
+            Assert.Equal(2, paramNames.Count);
+            
+            // One parameter should be %Child% and one should be 10
+            bool foundLikeParam = false;
+            bool foundNumberParam = false;
+            
+            foreach (var paramName in paramNames)
+            {
+                var value = parameters.Get<object>(paramName);
+                if (value is string strValue && strValue == "%Child%")
+                    foundLikeParam = true;
+                else if (value is int intValue && intValue == 10)
+                    foundNumberParam = true;
+            }
+            
+            Assert.True(foundLikeParam, "Should have a LIKE parameter with value '%Child%'");
+            Assert.True(foundNumberParam, "Should have a numeric parameter with value '10'");
+        }
     }
 }

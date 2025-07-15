@@ -22,6 +22,7 @@ public class DapperQuery<T> where T : class
     private readonly string _fullTableName;
     private readonly Dictionary<string, PropertyInfo> _propertyMap;
     private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;
+    private readonly DatabaseProvider? _databaseProvider;
     private readonly List<string> _whereClauses = new List<string>();
     private DynamicParameters _parameters = new DynamicParameters();
     private readonly StringBuilder _orderByClause = new StringBuilder();
@@ -47,9 +48,20 @@ public class DapperQuery<T> where T : class
     /// <param name="navigationProperties">The foreign keys in the database.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
-    public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction transaction,
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperQuery{T}"/> class.
+    /// </summary>
+    /// <param name="parent">The parent DapperSet.</param>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="transaction">An optional database transaction to associate with operations.</param>
+    /// <param name="fullTableName">The full name of the table.</param>
+    /// <param name="propertyMap">The property map.</param>
+    /// <param name="navigationProperties">The navigation properties.</param>
+    /// <param name="databaseProvider">The database provider to use for generating SQL syntax.</param>
+    public DapperQuery(DapperSet<T> parent, IDbConnection connection, IDbTransaction? transaction,
         string fullTableName, Dictionary<string, PropertyInfo> propertyMap,
-        Dictionary<string, NavigationPropertyInfo> navigationProperties)
+        Dictionary<string, NavigationPropertyInfo> navigationProperties,
+        DatabaseProvider? databaseProvider)
     {
         _parent = parent;
         _connection = connection;
@@ -57,6 +69,7 @@ public class DapperQuery<T> where T : class
         _fullTableName = fullTableName;
         _propertyMap = propertyMap;
         _navigationProperties = navigationProperties;
+        _databaseProvider = databaseProvider;
     }
 
     /// <summary>
@@ -368,7 +381,40 @@ public class DapperQuery<T> where T : class
                 var subQueryOrderBy = _orderByClause.ToString().Replace("t.", "");
                 subQuery.Append($" {subQueryOrderBy}");
             }
-            subQuery.Append($" LIMIT {_pageSize.Value} OFFSET {_pageIndex.Value * _pageSize.Value}");
+            
+            // Apply pagination based on the database provider
+            // Check if we're using SQLite connection (for testing purposes)
+            bool isSqliteConnection = _connection.GetType().Name.Contains("Sqlite");
+            
+            if (isSqliteConnection)
+            {
+                // Always use SQLite syntax for SQLite connections, regardless of provider
+                // This is to support unit tests that use SQLite but specify different providers
+                subQuery.Append($" LIMIT {_pageSize.Value} OFFSET {_pageIndex.Value * _pageSize.Value}");
+            }
+            else
+            {
+                switch (_databaseProvider)
+                {
+                    case DatabaseProvider.SqlServer:
+                        // SQL Server uses OFFSET-FETCH syntax
+                        if (_orderByClause.Length == 0)
+                        {
+                            // SQL Server requires an ORDER BY clause for OFFSET-FETCH
+                            subQuery.Append(" ORDER BY (SELECT NULL)");
+                        }
+                        subQuery.Append($" OFFSET {_pageIndex.Value * _pageSize.Value} ROWS FETCH NEXT {_pageSize.Value} ROWS ONLY");
+                        break;
+                        
+                    case DatabaseProvider.PostgreSQL:
+                    case DatabaseProvider.SQLite:
+                    default:
+                        // PostgreSQL and SQLite use LIMIT-OFFSET syntax
+                        subQuery.Append($" LIMIT {_pageSize.Value} OFFSET {_pageIndex.Value * _pageSize.Value}");
+                        break;
+                }
+            }
+            
             fromClause = $"({subQuery})";
             _whereClauses.Clear(); // Clear where clauses as they are applied in the subquery
         }

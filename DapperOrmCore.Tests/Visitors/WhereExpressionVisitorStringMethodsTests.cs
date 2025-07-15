@@ -247,5 +247,23 @@ namespace DapperOrmCore.Tests.Visitors
             Assert.Contains("= @", sql);
             Assert.Equal("test", parameters.Get<object>("p0"));
         }
+
+        [Fact]
+        public void Translate_LodCdProperty_ShouldNotAddNullCheck()
+        {
+            // Arrange
+            var visitor = new WhereExpressionVisitor<Lod>(_propertyMap, _navigationProperties, _referencedNavProps);
+            Expression<Func<Lod, bool>> expression = x => x.LodCd.ToLower() == "test";
+
+            // Act
+            var (sql, parameters) = visitor.Translate(expression);
+
+            // Assert
+            // LodCd is hardcoded as a non-nullable property in WhereExpressionVisitor
+            Assert.DoesNotContain("t.lod_cd IS NOT NULL", sql);
+            Assert.Contains("LOWER(t.lod_cd)", sql);
+            Assert.Contains("= @", sql);
+            Assert.Equal("test", parameters.Get<object>("p0"));
+        }
     }
 }

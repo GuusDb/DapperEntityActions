@@ -13,11 +13,17 @@ public class ApplicationDbContextWithTransaction : IDisposable
 {
     private readonly IDbConnection _connection;
     private IDbTransaction _transaction;
+    private readonly DatabaseProvider? _databaseProvider;
     
     /// <summary>
     /// Gets the current transaction. Exposed for testing purposes.
     /// </summary>
     public IDbTransaction Transaction => _transaction;
+    
+    /// <summary>
+    /// Gets the database provider used by this context.
+    /// </summary>
+    public DatabaseProvider DatabaseProvider => _databaseProvider ?? DatabaseProvider.SQLite;
 
     public DapperSet<Plant> Plants { get; }
     public DapperSet<TestLalala> Tests { get; }
@@ -27,24 +33,39 @@ public class ApplicationDbContextWithTransaction : IDisposable
     public DapperSet<AuditableEntity> AuditableEntities { get; }
     public DapperSet<EntityWithCreatedDate> EntitiesWithCreatedDate { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ApplicationDbContextWithTransaction"/> class.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
     public ApplicationDbContextWithTransaction(IDbConnection connection)
+        : this(connection, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ApplicationDbContextWithTransaction"/> class with a specific database provider.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="databaseProvider">The database provider to use for generating SQL syntax. If null, SQLite will be used as the default.</param>
+    public ApplicationDbContextWithTransaction(IDbConnection connection, DatabaseProvider? databaseProvider = null)
     {
         _connection = connection;
+        _databaseProvider = databaseProvider ?? DatabaseProvider.SQLite;
         _connection.Open();
         
         // Create an interceptor for auditable entities
         var auditInterceptor = new AuditableEntityInterceptor();
         
         // Initialize DapperSets without transaction
-        Plants = new DapperSet<Plant>(_connection);
-        Tests = new DapperSet<TestLalala>(_connection);
-        Measurements = new DapperSet<CoolMeasurement>(_connection);
-        Parents = new DapperSet<Parent>(_connection);
-        Children = new DapperSet<Child>(_connection);
+        Plants = new DapperSet<Plant>(_connection, _databaseProvider);
+        Tests = new DapperSet<TestLalala>(_connection, _databaseProvider);
+        Measurements = new DapperSet<CoolMeasurement>(_connection, _databaseProvider);
+        Parents = new DapperSet<Parent>(_connection, _databaseProvider);
+        Children = new DapperSet<Child>(_connection, _databaseProvider);
         
         // Use the interceptor for AuditableEntities and EntitiesWithCreatedDate
-        AuditableEntities = new DapperSet<AuditableEntity>(_connection, null, auditInterceptor);
-        EntitiesWithCreatedDate = new DapperSet<EntityWithCreatedDate>(_connection, null, auditInterceptor);
+        AuditableEntities = new DapperSet<AuditableEntity>(_connection, _databaseProvider, null, auditInterceptor);
+        EntitiesWithCreatedDate = new DapperSet<EntityWithCreatedDate>(_connection, _databaseProvider, null, auditInterceptor);
     }
 
     /// <summary>

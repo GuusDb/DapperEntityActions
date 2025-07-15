@@ -125,5 +125,31 @@ namespace DapperOrmCore.Tests.Visitors
             Assert.Single(result);
             Assert.Contains("Children", result);
         }
+
+        [Fact]
+        public void Extract_WithMultipleLevelsOfNavigationProperties_ShouldExtractCorrectly()
+        {
+            // Arrange
+            // This test simulates a scenario where we have multiple levels of navigation properties
+            // For example: Order -> Customer -> Address
+            // We'll use the existing models for simplicity
+            var navigationProperties = new List<string> { "Test", "Plant" };
+            var extractor = new NavigationPropertyExtractor(navigationProperties);
+
+            // Create a more complex expression that would represent accessing a property through
+            // multiple navigation properties if our model supported it
+            Expression<Func<CoolMeasurement, bool>> predicate = m =>
+                m.Test.Description == "Test 1" &&
+                m.Plant.IsAcive &&
+                (m.Value > 100 || m.TestCd == "TEST1");
+
+            // Act
+            var result = extractor.Extract(predicate).ToList();
+
+            // Assert
+            Assert.Equal(2, result.Count);
+            Assert.Contains("Test", result);
+            Assert.Contains("Plant", result);
+        }
     }
 }

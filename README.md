@@ -256,6 +256,165 @@ This feature is useful when you need to:
 - Control transaction scope more precisely
 - Implement custom transaction management logic
 
+## Database Provider Support
+
+The library now supports different database providers with provider-specific SQL syntax generation. This is particularly important for pagination, where different databases use different syntax.
+
+### Supported Database Providers
+
+- **SQLite**: Uses `LIMIT/OFFSET` syntax for pagination
+- **SQL Server**: Uses `OFFSET/FETCH` syntax for pagination
+- **PostgreSQL**: Uses `LIMIT/OFFSET` syntax for pagination
+
+### Configuring the Database Provider
+
+You can specify the database provider when creating a DbContext. The `DatabaseProvider` parameter is now nullable, defaulting to SQLite if null:
+
+```C#
+// Default (SQLite) - these are equivalent:
+var dbContext1 = new ApplicationDbContext(connection);
+var dbContext2 = new ApplicationDbContext(connection, null);
+var dbContext3 = new ApplicationDbContext(connection, DatabaseProvider.SQLite);
+
+// SQL Server
+var sqlServerContext = new ApplicationDbContext(connection, DatabaseProvider.SqlServer);
+
+// PostgreSQL
+var postgresContext = new ApplicationDbContext(connection, DatabaseProvider.PostgreSQL);
+```
+
+### Example: Pagination with Different Providers
+
+The pagination syntax is automatically adjusted based on the configured database provider:
+
+```C#
+// SQLite/PostgreSQL: Generates "LIMIT 10 OFFSET 0"
+var sqlitePage = await sqliteContext.Plants
+    .OrderBy(p => p.PlantCd)
+    .Paginate(0, 10)
+    .ExecuteAsync();
+
+// SQL Server: Generates "OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY"
+var sqlServerPage = await sqlServerContext.Plants
+    .OrderBy(p => p.PlantCd)
+    .Paginate(0, 10)
+    .ExecuteAsync();
+```
+
+Note that SQL Server requires an ORDER BY clause for OFFSET/FETCH pagination. If you don't provide one, a default `ORDER BY (SELECT NULL)` will be added automatically.
+
+### Testing with Different Database Providers
+
+To test your code with different database providers, you can use the following approach:
+
+#### 1. For SQLite (In-Memory Testing)
+
+```C#
+// Create an in-memory SQLite connection
+using var connection = new SqliteConnection("DataSource=:memory:");
+connection.Open();
+
+// Create a context with SQLite provider
+using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.SQLite);
+
+// Run your tests
+var results = await dbContext.YourEntity
+    .Paginate(0, 10)
+    .ExecuteAsync();
+```
+
+#### 2. For SQL Server
+
+```C#
+// Create a SQL Server connection
+using var connection = new SqlConnection("Your SQL Server Connection String");
+connection.Open();
+
+// Create a context with SQL Server provider
+using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.SqlServer);
+
+// Run your tests
+var results = await dbContext.YourEntity
+    .OrderBy(e => e.Id) // Required for SQL Server pagination
+    .Paginate(0, 10)
+    .ExecuteAsync();
+```
+
+#### 3. For PostgreSQL
+
+```C#
+// Create a PostgreSQL connection
+using var connection = new NpgsqlConnection("Your PostgreSQL Connection String");
+connection.Open();
+
+// Create a context with PostgreSQL provider
+using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.PostgreSQL);
+
+// Run your tests
+var results = await dbContext.YourEntity
+    .Paginate(0, 10)
+    .ExecuteAsync();
+```
+
+#### 4. Testing SQL Generation Without Real Databases
+
+You can also test the SQL generation logic without connecting to actual database servers by using SQLite with different database providers, as shown in the `PaginationProviderTests.cs` file:
+
+```C#
+// Using SQLite but with SqlServer provider to test the SQL generation
+using var connection = new SqliteConnection("DataSource=:memory:");
+connection.Open();
+
+// Create tables and seed data
+// ...
+
+// Test with SQL Server syntax
+using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.SqlServer);
+var results = await dbContext.YourEntity
+    .OrderBy(e => e.Id)
+    .Paginate(0, 10)
+    .ExecuteAsync();
+
+// The query will use SQL Server syntax (OFFSET/FETCH) but execute against SQLite
+// This works because SQLite is flexible with SQL syntax
+```
+
+This approach allows you to verify that the correct SQL syntax is being generated without needing to set up multiple database servers.
+
+#### 5. Integration Testing with Docker Containers
+
+For more realistic testing with actual database servers, you can use Docker containers. This project includes Docker configuration and helper scripts to make this process easier:
+
+```bash
+# Start Docker containers and run integration tests
+./run-integration-tests.ps1
+```
+
+The Docker setup includes:
+
+1. **docker-compose.yml**: Configures SQL Server and PostgreSQL containers
+2. **DatabaseConnectionFactory**: Creates connections to different database providers
+3. **RealDatabasePaginationTests**: Integration tests that use real database connections
+
+To manually set up and run the tests:
+
+```bash
+# Start the containers
+docker-compose up -d
+
+# Install required packages
+dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package System.Data.SqlClient
+dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package Npgsql
+
+# Run the integration tests
+dotnet test DapperOrmCore.Tests/DapperOrmCore.Tests.csproj --filter "FullyQualifiedName~RealDatabasePaginationTests"
+
+# Clean up when done
+docker-compose down
+```
+
+This approach provides the most accurate testing of your database provider-specific code, as it tests against actual database servers rather than just simulating the SQL syntax.
+
 ## Pagination
 ```C#
   var specificTests = await dbContext.Tests

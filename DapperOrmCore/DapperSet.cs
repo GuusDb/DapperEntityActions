@@ -27,6 +27,7 @@ public class DapperSet<T> : IDisposable where T : class
     private readonly Dictionary<string, NavigationPropertyInfo> _navigationProperties;
     private readonly DapperQuery<T> _query;
     private readonly InterceptorManager _interceptorManager;
+    private readonly DatabaseProvider? _databaseProvider;
     private bool _disposed = false;
 
     /// <summary>
@@ -46,10 +47,35 @@ public class DapperSet<T> : IDisposable where T : class
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
     /// <exception cref="ArgumentException">Thrown when the table or schema name is invalid.</exception>
-    public DapperSet(IDbConnection connection, IDbTransaction transaction = null, params ISaveChangesInterceptor[] interceptors)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperSet{T}"/> class.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="transaction">An optional database transaction to associate with operations.</param>
+    /// <param name="interceptors">Optional interceptors to use for operations.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
+    /// <exception cref="ArgumentException">Thrown when the table or schema name is invalid.</exception>
+    public DapperSet(IDbConnection connection, IDbTransaction? transaction = null, params ISaveChangesInterceptor[] interceptors)
+        : this(connection, null, transaction, interceptors)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DapperSet{T}"/> class with a specific database provider.
+    /// </summary>
+    /// <param name="connection">The database connection to use for operations.</param>
+    /// <param name="databaseProvider">The database provider to use for generating SQL syntax. If null, SQLite will be used as the default.</param>
+    /// <param name="transaction">An optional database transaction to associate with operations.</param>
+    /// <param name="interceptors">Optional interceptors to use for operations.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="connection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no primary key is found or the primary key column is not mapped.</exception>
+    /// <exception cref="ArgumentException">Thrown when the table or schema name is invalid.</exception>
+    public DapperSet(IDbConnection connection, DatabaseProvider? databaseProvider = null, IDbTransaction? transaction = null, params ISaveChangesInterceptor[] interceptors)
     {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _transaction = transaction;
+        _databaseProvider = databaseProvider ?? DatabaseProvider.SQLite;
         _interceptorManager = new InterceptorManager();
         
         // Add interceptors if provided
@@ -188,7 +214,7 @@ public class DapperSet<T> : IDisposable where T : class
         }
 
         // Initialize internal query builder
-        _query = new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap, _navigationProperties);
+        _query = new DapperQuery<T>(this, _connection, _transaction, _fullTableName, _propertyMap, _navigationProperties, _databaseProvider!);
 
         // Dapper column-to-property mapping
         SqlMapper.SetTypeMap(

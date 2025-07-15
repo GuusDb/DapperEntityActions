@@ -47,7 +47,13 @@ public class ApplicationDbContext : IDisposable
     {
         _connection = connection;
         _databaseProvider = databaseProvider ?? DatabaseProvider.SQLite;
-        _connection.Open();
+        
+     
+        if (_connection.State != ConnectionState.Open)
+        {
+            _connection.Open();
+        }
+        
         _transaction = _connection.BeginTransaction();
         
         // Create an interceptor for auditable entities

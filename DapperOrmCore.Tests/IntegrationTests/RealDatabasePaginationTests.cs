@@ -113,14 +113,10 @@ namespace DapperOrmCore.Tests.IntegrationTests
         {
             try
             {
-                // More aggressive cleanup for PostgreSQL
+                // Simple but effective cleanup - just delete all data and recreate table
                 if (provider == DatabaseProvider.PostgreSQL)
                 {
-                    // Drop the table and recreate the database schema if needed
                     connection.Execute("DROP TABLE IF EXISTS plant CASCADE;");
-                    // Also try to clean up any potential schema issues
-                    connection.Execute("DROP SCHEMA IF EXISTS test_schema CASCADE;");
-                    connection.Execute("CREATE SCHEMA IF NOT EXISTS test_schema;");
                 }
                 else if (provider == DatabaseProvider.SqlServer)
                 {

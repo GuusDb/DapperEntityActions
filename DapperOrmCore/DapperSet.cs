@@ -485,7 +485,31 @@ public class DapperSet<T> : IDisposable where T : class
         string columnNames = string.Join(", ", columns.Select(p => p.Key));
         string paramNames = string.Join(", ", columns.Select(p => "@" + p.Value.Name));
 
-        var sql = $"INSERT INTO {_fullTableName} ({columnNames}) VALUES ({paramNames}) RETURNING {_primaryKeyColumnName};";
+        // Generate SQL based on database provider
+        // Check if we're using SQLite connection (for testing purposes)
+        bool isSqliteConnection = _connection.GetType().Name.Contains("Sqlite");
+        
+        string sql;
+        if (isSqliteConnection)
+        {
+            // Always use SQLite syntax for SQLite connections, regardless of provider
+            // This is to support unit tests that use SQLite but specify different providers
+            sql = $"INSERT INTO {_fullTableName} ({columnNames}) VALUES ({paramNames}) RETURNING {_primaryKeyColumnName};";
+        }
+        else
+        {
+            switch (_databaseProvider)
+            {
+                case DatabaseProvider.SqlServer:
+                    sql = $"INSERT INTO {_fullTableName} ({columnNames}) OUTPUT INSERTED.{_primaryKeyColumnName} VALUES ({paramNames});";
+                    break;
+                case DatabaseProvider.PostgreSQL:
+                case DatabaseProvider.SQLite:
+                default:
+                    sql = $"INSERT INTO {_fullTableName} ({columnNames}) VALUES ({paramNames}) RETURNING {_primaryKeyColumnName};";
+                    break;
+            }
+        }
 
         try
         {

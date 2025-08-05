@@ -13,7 +13,7 @@ namespace DapperOrmCore.Tests.IntegrationTests
     public class RealDatabaseInsertTests : IDisposable
     {
         private readonly List<IDbConnection> _connections = new List<IDbConnection>();
-        
+
         /// <summary>
         /// Tests insert operations with a real SQL Server database using OUTPUT INSERTED syntax.
         /// </summary>
@@ -25,34 +25,34 @@ namespace DapperOrmCore.Tests.IntegrationTests
             {
                 return;
             }
-            
+
             // Create connection and context
             var connection = DatabaseConnectionFactory.CreateConnection(DatabaseProvider.SqlServer);
             _connections.Add(connection);
-            
+
             // Setup database
             SetupDatabase(connection, DatabaseProvider.SqlServer);
-            
+
             // Create context and test insert
             using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.SqlServer);
-            
+
             // Test string primary key insert
-            var newPlant = new Plant 
-            { 
-                PlantCd = "SQLSRV_PLANT", 
-                Description = "SQL Server Plant", 
-                IsAcive = true 
+            var newPlant = new Plant
+            {
+                PlantCd = "SQLSRV_PLANT",
+                Description = "SQL Server Plant",
+                IsAcive = true
             };
-            
+
             var insertedId = await dbContext.Plants.InsertAsync<string>(newPlant);
             var retrieved = await dbContext.Plants.GetByIdAsync<string>("SQLSRV_PLANT");
-            
+
             // Assert
             Assert.Equal("SQLSRV_PLANT", insertedId);
             Assert.NotNull(retrieved);
             Assert.Equal("SQL Server Plant", retrieved.Description);
             Assert.True(retrieved.IsAcive);
-            
+
             // Test auto-increment primary key insert
             var newMeasurement = new CoolMeasurement
             {
@@ -61,15 +61,15 @@ namespace DapperOrmCore.Tests.IntegrationTests
                 Value = 123.45,
                 MeasurementDate = DateTime.UtcNow
             };
-            
+
             var measurementId = await dbContext.Measurements.InsertAsync<int>(newMeasurement);
             var retrievedMeasurement = await dbContext.Measurements.GetByIdAsync<int>(measurementId);
-            
+
             Assert.True(measurementId > 0);
             Assert.NotNull(retrievedMeasurement);
             Assert.Equal(123.45, retrievedMeasurement.Value);
         }
-        
+
         /// <summary>
         /// Tests insert operations with a real PostgreSQL database using RETURNING syntax.
         /// </summary>
@@ -81,34 +81,34 @@ namespace DapperOrmCore.Tests.IntegrationTests
             {
                 return;
             }
-            
+
             // Create connection and context
             var connection = DatabaseConnectionFactory.CreateConnection(DatabaseProvider.PostgreSQL);
             _connections.Add(connection);
-            
+
             // Setup database
             SetupDatabase(connection, DatabaseProvider.PostgreSQL);
-            
+
             // Create context and test insert
             using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.PostgreSQL);
-            
+
             // Test string primary key insert
-            var newPlant = new Plant 
-            { 
-                PlantCd = "POSTGRES_PLANT", 
-                Description = "PostgreSQL Plant", 
-                IsAcive = true 
+            var newPlant = new Plant
+            {
+                PlantCd = "POSTGRES_PLANT",
+                Description = "PostgreSQL Plant",
+                IsAcive = true
             };
-            
+
             var insertedId = await dbContext.Plants.InsertAsync<string>(newPlant);
             var retrieved = await dbContext.Plants.GetByIdAsync<string>("POSTGRES_PLANT");
-            
+
             // Assert
             Assert.Equal("POSTGRES_PLANT", insertedId);
             Assert.NotNull(retrieved);
             Assert.Equal("PostgreSQL Plant", retrieved.Description);
             Assert.True(retrieved.IsAcive);
-            
+
             // Test auto-increment primary key insert
             var newMeasurement = new CoolMeasurement
             {
@@ -117,15 +117,15 @@ namespace DapperOrmCore.Tests.IntegrationTests
                 Value = 456.78,
                 MeasurementDate = DateTime.UtcNow
             };
-            
+
             var measurementId = await dbContext.Measurements.InsertAsync<int>(newMeasurement);
             var retrievedMeasurement = await dbContext.Measurements.GetByIdAsync<int>(measurementId);
-            
+
             Assert.True(measurementId > 0);
             Assert.NotNull(retrievedMeasurement);
             Assert.Equal(456.78, retrievedMeasurement.Value);
         }
-        
+
         /// <summary>
         /// Tests that SQL Server correctly handles multiple inserts and returns proper IDs.
         /// </summary>
@@ -137,21 +137,21 @@ namespace DapperOrmCore.Tests.IntegrationTests
             {
                 return;
             }
-            
+
             // Create connection and context
             var connection = DatabaseConnectionFactory.CreateConnection(DatabaseProvider.SqlServer);
             _connections.Add(connection);
-            
+
             // Setup database
             SetupDatabase(connection, DatabaseProvider.SqlServer);
-            
+
             // Create context
             using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.SqlServer);
-            
+
             // Insert multiple measurements and verify IDs are sequential
             var measurements = new List<CoolMeasurement>();
             var insertedIds = new List<int>();
-            
+
             for (int i = 1; i <= 5; i++)
             {
                 var measurement = new CoolMeasurement
@@ -161,16 +161,16 @@ namespace DapperOrmCore.Tests.IntegrationTests
                     Value = i * 10.0,
                     MeasurementDate = DateTime.UtcNow.AddMinutes(i)
                 };
-                
+
                 var id = await dbContext.Measurements.InsertAsync<int>(measurement);
                 insertedIds.Add(id);
                 measurements.Add(measurement);
             }
-            
+
             // Verify all IDs are unique and greater than 0
             Assert.Equal(5, insertedIds.Distinct().Count());
             Assert.All(insertedIds, id => Assert.True(id > 0));
-            
+
             // Verify we can retrieve all inserted measurements
             for (int i = 0; i < insertedIds.Count; i++)
             {
@@ -179,7 +179,7 @@ namespace DapperOrmCore.Tests.IntegrationTests
                 Assert.Equal((i + 1) * 10.0, retrieved.Value);
             }
         }
-        
+
         /// <summary>
         /// Tests that PostgreSQL correctly handles multiple inserts and returns proper IDs.
         /// </summary>
@@ -191,21 +191,21 @@ namespace DapperOrmCore.Tests.IntegrationTests
             {
                 return;
             }
-            
+
             // Create connection and context
             var connection = DatabaseConnectionFactory.CreateConnection(DatabaseProvider.PostgreSQL);
             _connections.Add(connection);
-            
+
             // Setup database
             SetupDatabase(connection, DatabaseProvider.PostgreSQL);
-            
+
             // Create context
             using var dbContext = new ApplicationDbContext(connection, DatabaseProvider.PostgreSQL);
-            
+
             // Insert multiple measurements and verify IDs are sequential
             var measurements = new List<CoolMeasurement>();
             var insertedIds = new List<int>();
-            
+
             for (int i = 1; i <= 5; i++)
             {
                 var measurement = new CoolMeasurement
@@ -215,16 +215,16 @@ namespace DapperOrmCore.Tests.IntegrationTests
                     Value = i * 20.0,
                     MeasurementDate = DateTime.UtcNow.AddMinutes(i)
                 };
-                
+
                 var id = await dbContext.Measurements.InsertAsync<int>(measurement);
                 insertedIds.Add(id);
                 measurements.Add(measurement);
             }
-            
+
             // Verify all IDs are unique and greater than 0
             Assert.Equal(5, insertedIds.Distinct().Count());
             Assert.All(insertedIds, id => Assert.True(id > 0));
-            
+
             // Verify we can retrieve all inserted measurements
             for (int i = 0; i < insertedIds.Count; i++)
             {
@@ -233,7 +233,7 @@ namespace DapperOrmCore.Tests.IntegrationTests
                 Assert.Equal((i + 1) * 20.0, retrieved.Value);
             }
         }
-        
+
         /// <summary>
         /// Sets up the database for testing.
         /// </summary>
@@ -241,14 +241,45 @@ namespace DapperOrmCore.Tests.IntegrationTests
         /// <param name="provider">The database provider.</param>
         private void SetupDatabase(IDbConnection connection, DatabaseProvider provider)
         {
+            try
+            {
+
+                string cleanupSql = provider switch
+                {
+                    DatabaseProvider.SqlServer => @"
+                        IF OBJECT_ID('measurement', 'U') IS NOT NULL
+                        BEGIN
+                            DELETE FROM measurement;
+                            DROP TABLE measurement;
+                        END
+                        IF OBJECT_ID('plant', 'U') IS NOT NULL
+                        BEGIN
+                            DELETE FROM plant;
+                            DROP TABLE plant;
+                        END
+                        IF OBJECT_ID('test', 'U') IS NOT NULL
+                        BEGIN
+                            DELETE FROM test;
+                            DROP TABLE test;
+                        END",
+                    DatabaseProvider.PostgreSQL => @"
+                        DROP TABLE IF EXISTS measurement CASCADE;
+                        DROP TABLE IF EXISTS plant CASCADE;
+                        DROP TABLE IF EXISTS test CASCADE;",
+                    _ => throw new ArgumentException($"Unsupported database provider: {provider}")
+                };
+
+                connection.Execute(cleanupSql);
+            }
+            catch
+            {
+                // Ignore cleanup errors - tables might not exist
+            }
+
             // Create tables based on provider
             string createTablesSql = provider switch
             {
                 DatabaseProvider.SqlServer => @"
-                    IF OBJECT_ID('measurement', 'U') IS NOT NULL DROP TABLE measurement;
-                    IF OBJECT_ID('plant', 'U') IS NOT NULL DROP TABLE plant;
-                    IF OBJECT_ID('test', 'U') IS NOT NULL DROP TABLE test;
-                    
                     CREATE TABLE plant (
                         plant_cd NVARCHAR(50) PRIMARY KEY,
                         description NVARCHAR(255),
@@ -274,10 +305,6 @@ namespace DapperOrmCore.Tests.IntegrationTests
                         measurement_date DATETIME2
                     );",
                 DatabaseProvider.PostgreSQL => @"
-                    DROP TABLE IF EXISTS measurement;
-                    DROP TABLE IF EXISTS plant;
-                    DROP TABLE IF EXISTS test;
-                    
                     CREATE TABLE plant (
                         plant_cd TEXT PRIMARY KEY,
                         description TEXT,
@@ -304,9 +331,9 @@ namespace DapperOrmCore.Tests.IntegrationTests
                     );",
                 _ => throw new ArgumentException($"Unsupported database provider: {provider}")
             };
-            
+
             connection.Execute(createTablesSql);
-            
+
             // Insert basic test data
             string insertPlantSql = provider switch
             {
@@ -318,7 +345,7 @@ namespace DapperOrmCore.Tests.IntegrationTests
                     VALUES ('PLANT1', 'Plant 1', true)",
                 _ => throw new ArgumentException($"Unsupported database provider: {provider}")
             };
-            
+
             string insertTestSql = provider switch
             {
                 DatabaseProvider.SqlServer => @"
@@ -329,11 +356,11 @@ namespace DapperOrmCore.Tests.IntegrationTests
                     VALUES ('TEST1', 'Test 1', true, 'Dimensional', 'InProcess', 80, NOW(), NOW())",
                 _ => throw new ArgumentException($"Unsupported database provider: {provider}")
             };
-            
+
             connection.Execute(insertPlantSql);
             connection.Execute(insertTestSql);
         }
-        
+
         public void Dispose()
         {
             foreach (var connection in _connections)

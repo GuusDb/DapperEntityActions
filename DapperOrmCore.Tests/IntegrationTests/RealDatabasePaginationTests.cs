@@ -111,18 +111,39 @@ namespace DapperOrmCore.Tests.IntegrationTests
         /// <param name="provider">The database provider.</param>
         private void SetupDatabase(IDbConnection connection, DatabaseProvider provider)
         {
+            try
+            {
+                // First, try to clean up any existing data
+                string cleanupSql = provider switch
+                {
+                    DatabaseProvider.SqlServer => @"
+                        IF OBJECT_ID('plant', 'U') IS NOT NULL
+                        BEGIN
+                            DELETE FROM plant;
+                            DROP TABLE plant;
+                        END",
+                    DatabaseProvider.PostgreSQL => @"
+                        DROP TABLE IF EXISTS plant CASCADE;",
+                    _ => throw new ArgumentException($"Unsupported database provider: {provider}")
+                };
+                
+                connection.Execute(cleanupSql);
+            }
+            catch
+            {
+                // Ignore cleanup errors - table might not exist
+            }
+            
             // Create tables based on provider
             string createTableSql = provider switch
             {
                 DatabaseProvider.SqlServer => @"
-                    IF OBJECT_ID('plant', 'U') IS NOT NULL DROP TABLE plant;
                     CREATE TABLE plant (
                         plant_cd NVARCHAR(50) PRIMARY KEY,
                         description NVARCHAR(255),
                         is_active BIT
                     )",
                 DatabaseProvider.PostgreSQL => @"
-                    DROP TABLE IF EXISTS plant;
                     CREATE TABLE plant (
                         plant_cd TEXT PRIMARY KEY,
                         description TEXT,

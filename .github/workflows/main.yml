@@ -77,8 +77,11 @@ jobs:
           dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package System.Data.SqlClient --source https://api.nuget.org/v3/index.json
           dotnet add DapperOrmCore.Tests/DapperOrmCore.Tests.csproj package Npgsql --source https://api.nuget.org/v3/index.json
 
-      - name: Run All Tests
-        run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore
+      - name: Run Unit Tests
+        run: dotnet test dapperEfLike.sln --configuration Release --no-build --no-restore --filter "FullyQualifiedName!~RealDatabase"
+        
+      - name: Run Integration Tests
+        run: dotnet test DapperOrmCore.Tests/DapperOrmCore.Tests.csproj --filter "FullyQualifiedName~RealDatabase"
         
       - name: Stop Docker Containers
         run: docker-compose down

@@ -113,25 +113,28 @@ namespace DapperOrmCore.Tests.IntegrationTests
         {
             try
             {
-                // First, try to clean up any existing data
-                string cleanupSql = provider switch
+                // More aggressive cleanup for PostgreSQL
+                if (provider == DatabaseProvider.PostgreSQL)
                 {
-                    DatabaseProvider.SqlServer => @"
+                    // Drop the table and recreate the database schema if needed
+                    connection.Execute("DROP TABLE IF EXISTS plant CASCADE;");
+                    // Also try to clean up any potential schema issues
+                    connection.Execute("DROP SCHEMA IF EXISTS test_schema CASCADE;");
+                    connection.Execute("CREATE SCHEMA IF NOT EXISTS test_schema;");
+                }
+                else if (provider == DatabaseProvider.SqlServer)
+                {
+                    connection.Execute(@"
                         IF OBJECT_ID('plant', 'U') IS NOT NULL
                         BEGIN
                             DELETE FROM plant;
                             DROP TABLE plant;
-                        END",
-                    DatabaseProvider.PostgreSQL => @"
-                        DROP TABLE IF EXISTS plant CASCADE;",
-                    _ => throw new ArgumentException($"Unsupported database provider: {provider}")
-                };
-                
-                connection.Execute(cleanupSql);
+                        END");
+                }
             }
             catch
             {
-                // Ignore cleanup errors - table might not exist
+                // Ignore cleanup errors - tables might not exist
             }
             
             // Create tables based on provider
